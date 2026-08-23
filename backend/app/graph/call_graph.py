@@ -59,7 +59,7 @@ def extract_definitions(
     except SyntaxError:
         return {}
 
-    relative_path = file_path.relative_to(root)
+    relative_path = file_path.relative_to(root).as_posix()
 
     definitions = {}
 
@@ -125,7 +125,7 @@ def build_class_method_table(
         except SyntaxError:
             continue
 
-        relative_path = file_path.relative_to(root)
+        relative_path = file_path.relative_to(root).as_posix()
 
         for node in tree.body:
 
@@ -674,7 +674,7 @@ def extract_calls(
     except SyntaxError:
         return []
 
-    relative_path = file_path.relative_to(root)
+    relative_path = file_path.relative_to(root).as_posix()
 
     import_aliases = extract_import_aliases(tree)
 

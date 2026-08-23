@@ -54,9 +54,9 @@ def get_internal_modules(root: Path, python_files: list[Path]) -> set[str]:
     modules = set()
 
     for file_path in python_files:
-        relative = file_path.relative_to(root)
+        relative = file_path.relative_to(root).as_posix()
 
-        module = str(relative.with_suffix("")).replace("/", ".")
+        module = str(relative).rsplit(".", 1)[0].replace("/", ".")
 
         if module.endswith(".__init__"):
             module = module[:-9]
@@ -102,10 +102,10 @@ def build_repository_graph(repository_path: str) -> dict:
 
     for file_path in python_files:
 
-        relative_path = file_path.relative_to(root)
+        relative_posix = file_path.relative_to(root).as_posix()
 
         nodes.append({
-            "id": str(relative_path),
+            "id": relative_posix,
             "type": "file",
             "language": "Python",
         })
@@ -120,7 +120,7 @@ def build_repository_graph(repository_path: str) -> dict:
             )
 
             edges.append({
-                "source": str(relative_path),
+                "source": relative_posix,
                 "target": imported_module,
                 "type": "imports",
                 "dependency": dependency_type,

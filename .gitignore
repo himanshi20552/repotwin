@@ -15,11 +15,15 @@ frontend/dist/
 
 # Cloned repositories analyzed by RepoTwin
 backend/data/repos/
+backend/data/indexes/
+data/repos/
+data/indexes/
 
 # Generated data
 *.db
 *.sqlite
 *.sqlite3
+.pytest_cache/
 
 # Vector stores / indexes
 chroma/

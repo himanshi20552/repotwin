@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import "./App.css";
 
-const API_BASE = "http://192.168.195.131:8000";
+const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8000";
 
 function App() {
   const [repositoryUrl, setRepositoryUrl] = useState(
@@ -15,10 +15,48 @@ function App() {
     "What happens if Response.close is changed?"
   );
 
+  const [ragMode, setRagMode] = useState("rag"); // "rag", "non_rag", "compare"
+  const [selectedModel, setSelectedModel] = useState("codellama:7b");
+
   const [analysis, setAnalysis] = useState(null);
+  const [compareResult, setCompareResult] = useState(null);
   const [loadingTargets, setLoadingTargets] = useState(false);
   const [loadingAnalysis, setLoadingAnalysis] = useState(false);
+  const [indexing, setIndexing] = useState(false);
+  const [indexStatus, setIndexStatus] = useState("");
+  const [apiHealth, setApiHealth] = useState(null);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    fetch(`${API_BASE}/health`)
+      .then((res) => res.json())
+      .then((data) => setApiHealth(data))
+      .catch(() => setApiHealth({ status: "disconnected" }));
+  }, []);
+
+  async function triggerIndexing() {
+    setError("");
+    setIndexing(true);
+    setIndexStatus("");
+    try {
+      const res = await fetch(`${API_BASE}/repositories/index`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          repository_url: repositoryUrl,
+          repository_name: repositoryName,
+          force_reindex: true,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "Indexing failed.");
+      setIndexStatus(`✓ Indexed ${data.chunk_count} code chunks`);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIndexing(false);
+    }
+  }
 
   async function discoverTargets() {
     setError("");
@@ -26,6 +64,7 @@ function App() {
     setTargets([]);
     setSelectedTarget(null);
     setAnalysis(null);
+    setCompareResult(null);
 
     try {
       const params = new URLSearchParams({
@@ -62,37 +101,61 @@ function App() {
     setError("");
     setLoadingAnalysis(true);
     setAnalysis(null);
+    setCompareResult(null);
 
     try {
-      const response = await fetch(
-        `${API_BASE}/repositories/engineering-analysis`,
-        {
+      if (ragMode === "compare") {
+        const response = await fetch(`${API_BASE}/repositories/rag-compare`, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             repository_url: repositoryUrl,
             repository_name: repositoryName,
             target_id: selectedTarget.id,
             question,
             max_depth: 6,
-            top_k: 10,
+            top_k_chunks: 5,
+            model: selectedModel,
           }),
+        });
+
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(
+            data.detail?.message || data.detail || "Comparison analysis failed."
+          );
         }
-      );
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          data.detail?.message ||
-            data.detail ||
-            "Engineering analysis failed."
+        setCompareResult(data);
+      } else {
+        const response = await fetch(
+          `${API_BASE}/repositories/engineering-analysis`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              repository_url: repositoryUrl,
+              repository_name: repositoryName,
+              target_id: selectedTarget.id,
+              question,
+              max_depth: 6,
+              top_k: 10,
+              use_rag: ragMode === "rag",
+              model: selectedModel,
+              top_k_chunks: 5,
+            }),
+          }
         );
-      }
 
-      setAnalysis(data);
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(
+            data.detail?.message ||
+              data.detail ||
+              "Engineering analysis failed."
+          );
+        }
+        setAnalysis(data);
+      }
     } catch (err) {
       setError(err.message);
     } finally {
@@ -100,7 +163,10 @@ function App() {
     }
   }
 
-  const summary = analysis?.summary;
+  const activeData = analysis || compareResult;
+  const summary = activeData?.summary;
+  const chunks =
+    analysis?.rag_chunks?.chunks || compareResult?.rag_chunks?.chunks || [];
 
   return (
     <div className="app-shell">
@@ -109,33 +175,62 @@ function App() {
           <div className="brand-mark">R</div>
           <div>
             <h1>RepoTwin</h1>
-            <span>Repository Intelligence</span>
+            <span>Code Intelligence & RAG Analysis</span>
           </div>
         </div>
 
-        <div className="status">
-          <span className="status-dot" />
-          API Connected
+        <div className="status-indicators">
+          <div className="status">
+            <span
+              className={`status-dot ${
+                apiHealth?.status === "healthy" ? "online" : "offline"
+              }`}
+            />
+            {apiHealth?.status === "healthy" ? "API Online" : "API Offline"}
+          </div>
+
+          <div className="status status-ollama">
+            <span
+              className={`status-dot ${
+                apiHealth?.ollama?.available ? "online" : "neutral"
+              }`}
+            />
+            Ollama:{" "}
+            {apiHealth?.ollama?.available ? "Connected" : "Not connected"}
+          </div>
         </div>
       </header>
 
       <main className="container">
         <section className="hero-section">
           <div>
-            <p className="eyebrow">CODEBASE INTELLIGENCE</p>
-            <h2>Understand the impact<br />before you change code.</h2>
+            <p className="eyebrow">EXERCISES 1–5: KNOWLEDGE BASE + VECTOR RAG + CODE LLAMA</p>
+            <h2>
+              Evidence-Grounded Code Intelligence
+            </h2>
             <p className="hero-copy">
-              Analyze repository dependencies, affected tests, Git history,
-              engineering risk, and evidence-grounded AI reasoning.
+              Combines AST-driven code chunking, vector similarity retrieval,
+              authoritative deterministic call-graphs, and Code Llama reasoning.
             </p>
           </div>
         </section>
 
+        {/* 01. Connect Repository */}
         <section className="panel repository-panel">
           <div className="panel-heading">
             <div>
-              <p className="section-label">01 · REPOSITORY</p>
-              <h3>Connect a repository</h3>
+              <p className="section-label">01 · REPOSITORY & KNOWLEDGE BASE</p>
+              <h3>Connect & Index Repository</h3>
+            </div>
+            <div className="action-buttons">
+              <button
+                className="secondary-button"
+                onClick={triggerIndexing}
+                disabled={indexing}
+              >
+                {indexing ? "Indexing chunks..." : "Build Vector Index"}
+              </button>
+              {indexStatus && <span className="index-badge">{indexStatus}</span>}
             </div>
           </div>
 
@@ -165,7 +260,7 @@ function App() {
               <input
                 value={targetSearch}
                 onChange={(e) => setTargetSearch(e.target.value)}
-                placeholder="close, Response, Session..."
+                placeholder="close, Response, Session, include_router..."
                 onKeyDown={(e) => {
                   if (e.key === "Enter") {
                     discoverTargets();
@@ -184,17 +279,15 @@ function App() {
           </div>
         </section>
 
+        {/* 02. Target Selection */}
         {targets.length > 0 && (
           <section className="panel">
             <div className="panel-heading">
               <div>
-                <p className="section-label">02 · TARGET</p>
+                <p className="section-label">02 · TARGET SELECTION</p>
                 <h3>Select a code entity</h3>
               </div>
-
-              <span className="result-count">
-                {targets.length} found
-              </span>
+              <span className="result-count">{targets.length} found</span>
             </div>
 
             <div className="target-list">
@@ -207,10 +300,15 @@ function App() {
                   onClick={() => {
                     setSelectedTarget(target);
                     setAnalysis(null);
+                    setCompareResult(null);
                   }}
                 >
                   <div className="target-icon">
-                    {target.type === "method" ? "M" : "F"}
+                    {target.type === "method"
+                      ? "M"
+                      : target.type === "class"
+                      ? "C"
+                      : "F"}
                   </div>
 
                   <div className="target-info">
@@ -220,11 +318,7 @@ function App() {
                         : target.name}
                     </strong>
                     <span>{target.file}</span>
-                    <small>
-                      {target.type === "method"
-                        ? "method"
-                        : target.type}
-                    </small>
+                    <small>{target.type}</small>
                   </div>
 
                   <div className="target-arrow">→</div>
@@ -234,16 +328,14 @@ function App() {
           </section>
         )}
 
+        {/* 03. Engineering Question & RAG Settings */}
         {selectedTarget && (
           <section className="panel question-panel">
             <div className="panel-heading">
               <div>
-                <p className="section-label">03 · ENGINEERING QUESTION</p>
+                <p className="section-label">03 · RAG CONFIGURATION & QUESTION</p>
                 <h3>
-                  Analyze{" "}
-                  <code>
-                    {selectedTarget.name}
-                  </code>
+                  Analyze <code>{selectedTarget.name}</code>
                 </h3>
               </div>
             </div>
@@ -253,12 +345,54 @@ function App() {
               <strong>{selectedTarget.id}</strong>
             </div>
 
-            <label>
-              <span>Your question</span>
+            <div className="rag-controls-grid">
+              <div className="control-group">
+                <label className="control-label">RAG Mode</label>
+                <div className="button-group">
+                  <button
+                    type="button"
+                    className={`toggle-btn ${ragMode === "rag" ? "active" : ""}`}
+                    onClick={() => setRagMode("rag")}
+                  >
+                    With RAG (Grounded)
+                  </button>
+                  <button
+                    type="button"
+                    className={`toggle-btn ${ragMode === "non_rag" ? "active" : ""}`}
+                    onClick={() => setRagMode("non_rag")}
+                  >
+                    Without RAG (General LLM)
+                  </button>
+                  <button
+                    type="button"
+                    className={`toggle-btn ${ragMode === "compare" ? "active" : ""}`}
+                    onClick={() => setRagMode("compare")}
+                  >
+                    Compare Side-by-Side
+                  </button>
+                </div>
+              </div>
+
+              <div className="control-group">
+                <label className="control-label">Model Selection</label>
+                <select
+                  className="model-select"
+                  value={selectedModel}
+                  onChange={(e) => setSelectedModel(e.target.value)}
+                >
+                  <option value="codellama:7b">Code Llama (codellama:7b) [Required]</option>
+                  <option value="qwen2.5-coder:1.5b">Qwen (qwen2.5-coder:1.5b) [Optional]</option>
+                </select>
+              </div>
+            </div>
+
+            <label className="question-input-label">
+              <span>Engineering Question</span>
               <textarea
                 value={question}
                 onChange={(e) => setQuestion(e.target.value)}
                 rows="3"
+                placeholder="e.g. What happens if this entity is modified?"
               />
             </label>
 
@@ -267,259 +401,236 @@ function App() {
               onClick={runAnalysis}
               disabled={loadingAnalysis}
             >
-              {loadingAnalysis ? "Analyzing repository..." : "Run engineering analysis →"}
+              {loadingAnalysis
+                ? "Running Orchestration & Analysis..."
+                : ragMode === "compare"
+                ? "Run RAG vs Non-RAG Comparison →"
+                : "Run Engineering Analysis →"}
             </button>
           </section>
         )}
 
         {error && (
           <div className="error-box">
-            <strong>Analysis error</strong>
+            <strong>Analysis Error</strong>
             <span>{error}</span>
           </div>
         )}
 
-        {analysis && (
+        {/* 04. Deterministic Authoritative Metrics */}
+        {activeData && (
           <>
             <section className="results-header">
               <div>
-                <p className="section-label">04 · ANALYSIS RESULT</p>
-                <h3>Engineering impact report</h3>
+                <p className="section-label">04 · AUTHORITATIVE DETERMINISTIC IMPACT</p>
+                <h3>Deterministic Repository Metrics</h3>
               </div>
-
               <div className="validation-badge">
                 <span>✓</span>
-                Evidence validated
+                Deterministic Graph Verified
               </div>
             </section>
 
             <section className="metrics-grid">
               <Metric
-                label="Production impact"
+                label="Production Impact"
                 value={summary?.production_impact}
               />
               <Metric
-                label="Direct callers"
+                label="Direct Callers"
                 value={summary?.direct_callers}
               />
               <Metric
-                label="Indirect callers"
+                label="Indirect Callers"
                 value={summary?.indirect_callers}
               />
               <Metric
-                label="Affected tests"
+                label="Affected Tests"
                 value={summary?.affected_tests}
               />
               <Metric
-                label="Risk score"
+                label="Risk Score"
                 value={summary?.risk_score}
                 danger
               />
               <Metric
-                label="Risk level"
+                label="Risk Level"
                 value={summary?.risk_level}
                 danger
               />
             </section>
 
-            <section className="analysis-overview">
-              <div className="overview-card">
-                <span className="overview-label">IMPACT BREAKDOWN</span>
-                <div className="overview-row">
-                  <span>Direct callers</span>
-                  <strong>{summary?.direct_callers ?? 0}</strong>
-                </div>
-                <div className="overview-row">
-                  <span>Indirect callers</span>
-                  <strong>{summary?.indirect_callers ?? 0}</strong>
-                </div>
-                <div className="overview-row">
-                  <span>Affected tests</span>
-                  <strong>{summary?.affected_tests ?? 0}</strong>
-                </div>
-              </div>
-
-              <div className="overview-card">
-                <span className="overview-label">RISK SIGNALS</span>
-                <div className="overview-row">
-                  <span>High-confidence paths</span>
-                  <strong>
-                    {analysis.analysis?.risk?.signals?.high_confidence_paths ?? 0}
-                  </strong>
-                </div>
-                <div className="overview-row">
-                  <span>Medium-confidence paths</span>
-                  <strong>
-                    {analysis.analysis?.risk?.signals?.medium_confidence_paths ?? 0}
-                  </strong>
-                </div>
-                <div className="overview-row">
-                  <span>Affected files</span>
-                  <strong>
-                    {analysis.analysis?.risk?.signals?.affected_files ?? 0}
-                  </strong>
-                </div>
-              </div>
-            </section>
-
-            <section className="panel ai-panel">
-              <div className="panel-heading">
-                <div>
-                  <p className="section-label">ENGINEERING ANALYSIS</p>
-                  <h3>Evidence-grounded analysis</h3>
-                </div>
-
-                <span className="model-label">
-                  {analysis.ai_analysis?.model}
-                </span>
-              </div>
-
-              <div className="answer">
-                {analysis.ai_analysis?.answer
-                  ?.split("\n")
-                  .map((line, index) => (
-                    <p key={index}>
-                      {line || "\u00A0"}
-                    </p>
-                  ))}
-              </div>
-            </section>
-
-            <section className="panel history-panel">
-              <div className="panel-heading">
-                <div>
-                  <p className="section-label">GIT HISTORY</p>
-                  <h3>Repository history</h3>
-                </div>
-              </div>
-
-              <div className="history-section">
-                <div className="history-heading">
-                  <span className="history-label">SYMBOL HISTORY</span>
-                  <strong>
-                    {analysis.analysis?.history?.symbol_history?.commit_count ?? 0} commit(s)
-                  </strong>
-                </div>
-
-                {analysis.analysis?.history?.symbol_history?.commits?.length ? (
-                  <div className="commit-list">
-                    {analysis.analysis.history.symbol_history.commits.map((commit) => (
-                      <div className="commit-item" key={commit.commit}>
-                        <div className="commit-date">{commit.date}</div>
-                        <div className="commit-content">
-                          <strong>{commit.message}</strong>
-                          <code>{commit.commit}</code>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="empty-history">
-                    No symbol-history evidence supplied.
-                  </p>
-                )}
-              </div>
-
-              <div className="history-section">
-                <div className="history-heading">
-                  <span className="history-label">FILE HISTORY</span>
-                  <strong>
-                    {analysis.analysis?.history?.file_history?.commit_count ?? 0} commits
-                  </strong>
-                </div>
-
-                <div className="commit-list">
-                  {analysis.analysis?.history?.file_history?.commits
-                    ?.slice(0, 10)
-                    .map((commit) => (
-                      <div className="commit-item" key={commit.commit}>
-                        <div className="commit-date">{commit.date}</div>
-                        <div className="commit-content">
-                          <strong>{commit.message}</strong>
-                          <code>{commit.commit}</code>
-                        </div>
-                      </div>
-                    ))}
-                </div>
-              </div>
-            </section>
-
-            <section className="two-column">
-              <div className="panel">
+            {/* 05. Retrieved Code Chunks Panel (Knowledge Base & Vector Similarity) */}
+            {chunks.length > 0 && (
+              <section className="panel chunks-panel">
                 <div className="panel-heading">
                   <div>
-                    <p className="section-label">EVIDENCE</p>
-                    <h3>Retrieved evidence</h3>
+                    <p className="section-label">VECTOR SEARCH & KNOWLEDGE BASE</p>
+                    <h3>Retrieved AST Code Chunks ({chunks.length})</h3>
                   </div>
+                  <span className="kb-badge">Real Cosine Similarity</span>
                 </div>
 
-                <div className="evidence-list">
-                  {analysis.retrieval?.evidence?.map((item, index) => (
-                    <div className="evidence-item" key={index}>
-                      <div>
-                        <span className="evidence-category">
-                          {item.category}
-                        </span>
-                        <strong>{item.source_name || item.source}</strong>
+                <div className="chunks-list">
+                  {chunks.map((chunk, idx) => (
+                    <div className="chunk-card" key={idx}>
+                      <div className="chunk-header">
+                        <div className="chunk-title">
+                          <span className="chunk-type">{chunk.type}</span>
+                          <strong>{chunk.name}</strong>
+                          <span className="chunk-file">
+                            {chunk.file}:{chunk.start_line}-{chunk.end_line}
+                          </span>
+                        </div>
+                        <div className="chunk-score">
+                          Similarity:{" "}
+                          <strong>
+                            {(
+                              (chunk.similarity_score ?? 0) * 100
+                            ).toFixed(1)}
+                            %
+                          </strong>
+                        </div>
                       </div>
-                      <span className="depth">
-                        depth {item.depth}
-                      </span>
+                      <pre className="chunk-code">
+                        <code>{chunk.source_code || chunk.text}</code>
+                      </pre>
                     </div>
                   ))}
                 </div>
-              </div>
+              </section>
+            )}
 
-              <div className="panel">
+            {/* 06. Side-by-Side Comparison Mode */}
+            {compareResult && (
+              <section className="compare-grid">
+                <div className="panel compare-card">
+                  <div className="panel-heading">
+                    <div>
+                      <p className="section-label">WITH RAG</p>
+                      <h3>Evidence-Grounded Reasoning</h3>
+                    </div>
+                    <ValidationBadge
+                      validation={compareResult.with_rag?.validation}
+                    />
+                  </div>
+                  <div className="answer-box">
+                    <p className="answer-text">
+                      {compareResult.with_rag?.answer}
+                    </p>
+                  </div>
+                  {compareResult.with_rag?.error && (
+                    <small className="error-note">
+                      {compareResult.with_rag.error}
+                    </small>
+                  )}
+                </div>
+
+                <div className="panel compare-card">
+                  <div className="panel-heading">
+                    <div>
+                      <p className="section-label">WITHOUT RAG</p>
+                      <h3>Ungrounded General Model</h3>
+                    </div>
+                    <ValidationBadge
+                      validation={compareResult.without_rag?.validation}
+                    />
+                  </div>
+                  <div className="answer-box">
+                    <p className="answer-text">
+                      {compareResult.without_rag?.answer}
+                    </p>
+                  </div>
+                  {compareResult.without_rag?.error && (
+                    <small className="error-note">
+                      {compareResult.without_rag.error}
+                    </small>
+                  )}
+                </div>
+              </section>
+            )}
+
+            {/* 07. Single Mode AI Explanation */}
+            {analysis && (
+              <section className="panel ai-panel">
                 <div className="panel-heading">
                   <div>
-                    <p className="section-label">VALIDATION</p>
-                    <h3>Evidence validator</h3>
+                    <p className="section-label">
+                      {analysis.use_rag
+                        ? "RAG EVIDENCE-GROUNDED REASONING"
+                        : "NON-RAG GENERAL ANALYSIS"}
+                    </p>
+                    <h3>AI Engineering Analysis</h3>
                   </div>
-                </div>
-
-                <div
-                  className={`validation-result ${
-                    analysis.ai_analysis?.validation?.status === "SUPPORTED"
-                      ? "validation-supported"
-                      : analysis.ai_analysis?.validation?.status === "CAUTION"
-                        ? "validation-caution"
-                        : "validation-review"
-                  }`}
-                >
-                  <div className="validation-icon">
-                    {analysis.ai_analysis?.validation?.validated ? "✓" : "!"}
-                  </div>
-                  <div>
-                    <strong>
-                      {analysis.ai_analysis?.validation?.status || "UNKNOWN"}
-                    </strong>
-                    <span>
-                      {analysis.ai_analysis?.validation?.validated
-                        ? "The AI response is consistent with the deterministic repository evidence."
-                        : "Some claims require review against the repository evidence."}
+                  <div className="panel-meta">
+                    <span className="model-label">
+                      Model: {analysis.ai_analysis?.model}
                     </span>
+                    <ValidationBadge
+                      validation={analysis.ai_analysis?.validation}
+                    />
                   </div>
                 </div>
 
-                <div className="validation-stats">
-                  <div>
-                    <span>Validated</span>
-                    <strong>
-                      {String(
-                        analysis.ai_analysis?.validation?.validated
-                      )}
-                    </strong>
+                <div className="answer">
+                  {analysis.ai_analysis?.answer
+                    ?.split("\n")
+                    .map((line, index) => (
+                      <p key={index}>{line || "\u00A0"}</p>
+                    ))}
+                </div>
+
+                {analysis.ai_analysis?.error && (
+                  <div className="notice-box">
+                    <strong>Integration Notice:</strong>{" "}
+                    {analysis.ai_analysis.error}
                   </div>
+                )}
+              </section>
+            )}
+
+            {/* 08. Git History Evidence */}
+            {analysis?.analysis?.history && (
+              <section className="panel history-panel">
+                <div className="panel-heading">
                   <div>
-                    <span>Claims requiring review</span>
-                    <strong>
-                      {analysis.ai_analysis?.validation?.claim_count ?? 0}
-                    </strong>
+                    <p className="section-label">GIT HISTORY EVIDENCE</p>
+                    <h3>Repository & Symbol History</h3>
                   </div>
                 </div>
-              </div>
-            </section>
+
+                <div className="history-section">
+                  <div className="history-heading">
+                    <span className="history-label">SYMBOL HISTORY</span>
+                    <strong>
+                      {analysis.analysis.history.symbol_history?.commit_count ??
+                        0}{" "}
+                      commit(s)
+                    </strong>
+                  </div>
+
+                  {analysis.analysis.history.symbol_history?.commits?.length ? (
+                    <div className="commit-list">
+                      {analysis.analysis.history.symbol_history.commits.map(
+                        (commit) => (
+                          <div className="commit-item" key={commit.commit}>
+                            <div className="commit-date">{commit.date}</div>
+                            <div className="commit-content">
+                              <strong>{commit.message}</strong>
+                              <code>{commit.commit}</code>
+                            </div>
+                          </div>
+                        )
+                      )}
+                    </div>
+                  ) : (
+                    <p className="empty-history">
+                      No symbol-history evidence supplied.
+                    </p>
+                  )}
+                </div>
+              </section>
+            )}
           </>
         )}
       </main>
@@ -533,6 +644,25 @@ function Metric({ label, value, danger = false }) {
       <span>{label}</span>
       <strong>{value ?? "—"}</strong>
     </div>
+  );
+}
+
+function ValidationBadge({ validation }) {
+  if (!validation) return null;
+  const isSupported = validation.status === "SUPPORTED";
+  const isCaution = validation.status === "CAUTION";
+  return (
+    <span
+      className={`validation-tag ${
+        isSupported
+          ? "val-supported"
+          : isCaution
+          ? "val-caution"
+          : "val-review"
+      }`}
+    >
+      {isSupported ? "✓ SUPPORTED" : isCaution ? "⚠ CAUTION" : "! REVIEW"}
+    </span>
   );
 }
 

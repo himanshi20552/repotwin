@@ -34,7 +34,7 @@ def analyze_file(file_path: Path, root: Path):
     except SyntaxError:
         return [], []
 
-    relative = file_path.relative_to(root)
+    relative = file_path.relative_to(root).as_posix()
 
     nodes = []
     edges = []

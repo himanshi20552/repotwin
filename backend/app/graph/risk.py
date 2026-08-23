@@ -5,12 +5,12 @@ def calculate_risk(
 
     direct = [
         item for item in impact.get("direct_impact", [])
-        if not (item.get("file") or "").lower().startswith("tests/")
+        if not (item.get("file") or "").replace("\\", "/").lower().startswith("tests/")
     ]
 
     indirect = [
         item for item in impact.get("indirect_impact", [])
-        if not (item.get("file") or "").lower().startswith("tests/")
+        if not (item.get("file") or "").replace("\\", "/").lower().startswith("tests/")
     ]
 
     impacted = direct + indirect
@@ -45,7 +45,7 @@ def calculate_risk(
             None,
         )
 
-        if source_node and (source_node.get("file") or "").lower().startswith("tests/"):
+        if source_node and (source_node.get("file") or "").replace("\\", "/").lower().startswith("tests/"):
             continue
 
         if edge.get("confidence") == "high":

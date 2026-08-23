@@ -85,10 +85,10 @@ def find_test_impact(
                 {},
             )
 
-            file_path = node.get(
+            file_path = (node.get(
                 "file",
                 "",
-            )
+            ) or "").replace("\\", "/")
 
             if file_path.startswith(
                 "tests/"
