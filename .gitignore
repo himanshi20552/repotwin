@@ -1,0 +1,38 @@
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Node
+node_modules/
+frontend/dist/
+
+# Cloned repositories analyzed by RepoTwin
+backend/data/repos/
+
+# Generated data
+*.db
+*.sqlite
+*.sqlite3
+
+# Vector stores / indexes
+chroma/
+qdrant/
+vector_store/
+.vectordb/
+
+# Logs
+*.log
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.backup

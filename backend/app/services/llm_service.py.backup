@@ -1,0 +1,191 @@
+import requests
+from app.validation.evidence_validator import validate_answer
+
+
+OLLAMA_URL = "http://localhost:11434/api/generate"
+DEFAULT_MODEL = "qwen2.5-coder:1.5b"
+
+
+def generate_with_ollama(
+    prompt: str,
+    model: str = DEFAULT_MODEL,
+    timeout: int = 300,
+) -> str:
+
+    response = requests.post(
+        OLLAMA_URL,
+        json={
+            "model": model,
+            "prompt": prompt,
+            "stream": False,
+            "options": {
+                "temperature": 0.1,
+                "num_ctx": 4096,
+                "num_predict": 500,
+            },
+        },
+        timeout=timeout,
+    )
+
+    response.raise_for_status()
+
+    data = response.json()
+
+    return data.get(
+        "response",
+        "",
+    )
+
+
+def build_engineering_prompt(
+    retrieval_context: dict,
+) -> str:
+
+    target = retrieval_context.get(
+        "target",
+        {},
+    )
+
+    risk = retrieval_context.get(
+        "risk",
+        {},
+    )
+
+    evidence = retrieval_context.get(
+        "retrieved_evidence",
+        [],
+    )
+
+    evidence_lines = []
+
+    for index, item in enumerate(
+        evidence,
+        start=1,
+    ):
+
+        evidence_lines.append(
+            f"EVIDENCE {index}\n"
+            f"category: {item.get('category')}\n"
+            f"relationship: {item.get('relationship')}\n"
+            f"source: {item.get('source')}\n"
+            f"source_name: {item.get('source_name')}\n"
+            f"file: {item.get('file')}\n"
+            f"depth: {item.get('depth')}\n"
+            f"confidence: {item.get('confidence')}\n"
+        )
+
+    evidence_text = "\n".join(
+        evidence_lines
+    )
+
+    history = retrieval_context.get(
+        "history",
+        {},
+    )
+
+    file_history = history.get(
+        "file_history",
+        {},
+    )
+
+    commits = file_history.get(
+        "commits",
+        [],
+    )
+
+    commit_lines = []
+
+    for commit in commits[:5]:
+        commit_lines.append(
+            f"- {commit.get('date')} "
+            f"{commit.get('commit')} "
+            f"{commit.get('message')}"
+        )
+
+    commit_text = "\n".join(
+        commit_lines
+    ) or "No commit evidence supplied."
+
+    return f"""
+You are RepoTwin, an evidence-grounded software engineering assistant.
+
+IMPORTANT RULES:
+
+1. Use ONLY facts explicitly present in the supplied evidence.
+2. Do NOT use your pretrained knowledge about the repository.
+3. Do NOT invent versions, commits, dates, callers, tests, dependencies, bugs, vulnerabilities, or implementation details.
+4. If the evidence does not establish something, say:
+   "The supplied repository evidence does not establish this."
+5. Do NOT recommend changing code unless the supplied evidence supports the recommendation.
+6. Do NOT claim that a test is affected unless it appears in the supplied evidence.
+7. Treat numerical analysis values as authoritative.
+8. Historical claims may ONLY use the supplied Git history below.
+
+TARGET
+{target}
+
+DETERMINISTIC ANALYSIS
+
+Production impact count:
+{retrieval_context.get("production_impact_count", 0)}
+
+Test impact count:
+{retrieval_context.get("test_impact_count", 0)}
+
+Risk:
+{risk}
+
+GIT HISTORY EVIDENCE
+
+{commit_text}
+
+RETRIEVED CODE-GRAPH EVIDENCE
+
+{evidence_text}
+
+USER QUESTION
+
+{retrieval_context.get("query", "")}
+
+ANSWER FORMAT
+
+1. Impact
+2. Risk
+3. Affected tests
+4. Relevant history
+5. Recommendation
+
+Keep the answer concise.
+
+For every important claim, rely on the supplied evidence.
+If the evidence is insufficient, explicitly say so.
+""".strip()
+
+
+def analyze_with_ollama(
+    retrieval_context: dict,
+    model: str = DEFAULT_MODEL,
+) -> dict:
+
+    prompt = build_engineering_prompt(
+        retrieval_context
+    )
+
+    answer = generate_with_ollama(
+        prompt,
+        model=model,
+    )
+
+    validation = validate_answer(
+        answer,
+        retrieval_context.get(
+            "evidence_package",
+            retrieval_context,
+        ),
+    )
+
+    return {
+        "model": model,
+        "answer": answer,
+        "validation": validation,
+    }

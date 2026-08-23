@@ -1,0 +1,86 @@
+def calculate_risk(
+    impact: dict,
+    graph: dict,
+) -> dict:
+
+    direct = [
+        item for item in impact.get("direct_impact", [])
+        if not (item.get("file") or "").lower().startswith("tests/")
+    ]
+
+    indirect = [
+        item for item in impact.get("indirect_impact", [])
+        if not (item.get("file") or "").lower().startswith("tests/")
+    ]
+
+    impacted = direct + indirect
+
+    impacted_files = {
+        item.get("file")
+        for item in impacted
+        if item.get("file")
+    }
+
+    high_confidence = 0
+    medium_confidence = 0
+
+    target_id = impact["target"]["id"]
+
+    for edge in graph["edges"]:
+
+        if edge["type"] != "calls":
+            continue
+
+        if edge["target"] != target_id:
+            continue
+
+        if edge.get("resolution") != "internal":
+            continue
+
+        if edge.get("confidence") == "high":
+            high_confidence += 1
+
+        elif edge.get("confidence") == "medium":
+            medium_confidence += 1
+
+    direct_count = len(direct)
+    indirect_count = len(indirect)
+    file_count = len(impacted_files)
+
+    score = 0
+
+    # Direct callers are the strongest basic signal.
+    score += min(direct_count * 12, 36)
+
+    # Indirect callers increase propagation risk.
+    score += min(indirect_count * 8, 24)
+
+    # Cross-file impact.
+    score += min(file_count * 5, 20)
+
+    # Confidence-weighted evidence.
+    score += min(high_confidence * 4, 16)
+    score += min(medium_confidence * 2, 8)
+
+    score = min(score, 100)
+
+    if score >= 70:
+        level = "HIGH"
+    elif score >= 40:
+        level = "MEDIUM"
+    elif score >= 20:
+        level = "LOW"
+    else:
+        level = "MINIMAL"
+
+    return {
+        "score": score,
+        "level": level,
+        "signals": {
+            "direct_callers": direct_count,
+            "indirect_callers": indirect_count,
+            "affected_files": file_count,
+            "high_confidence_paths": high_confidence,
+            "medium_confidence_paths": medium_confidence,
+        },
+    }

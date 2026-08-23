@@ -1,0 +1,256 @@
+import requests
+from app.validation.evidence_validator import validate_answer
+
+
+OLLAMA_URL = "http://localhost:11434/api/generate"
+DEFAULT_MODEL = "qwen2.5-coder:1.5b"
+
+
+def generate_with_ollama(
+    prompt: str,
+    model: str = DEFAULT_MODEL,
+    timeout: int = 300,
+) -> str:
+
+    response = requests.post(
+        OLLAMA_URL,
+        json={
+            "model": model,
+            "prompt": prompt,
+            "stream": False,
+            "options": {
+                "temperature": 0.1,
+                "num_ctx": 4096,
+                "num_predict": 500,
+            },
+        },
+        timeout=timeout,
+    )
+
+    response.raise_for_status()
+
+    data = response.json()
+
+    return data.get(
+        "response",
+        "",
+    )
+
+
+def build_engineering_prompt(
+    retrieval_context: dict,
+) -> str:
+
+    target = retrieval_context.get(
+        "target",
+        {},
+    )
+
+    risk = retrieval_context.get(
+        "risk",
+        {},
+    )
+
+    evidence = retrieval_context.get(
+        "retrieved_evidence",
+        [],
+    )
+
+    evidence_lines = []
+
+    for index, item in enumerate(
+        evidence,
+        start=1,
+    ):
+
+        evidence_lines.append(
+            f"EVIDENCE {index}\n"
+            f"category: {item.get('category')}\n"
+            f"relationship: {item.get('relationship')}\n"
+            f"source: {item.get('source')}\n"
+            f"source_name: {item.get('source_name')}\n"
+            f"file: {item.get('file')}\n"
+            f"depth: {item.get('depth')}\n"
+            f"confidence: {item.get('confidence')}\n"
+        )
+
+    evidence_text = "\n".join(
+        evidence_lines
+    )
+
+    history = retrieval_context.get(
+        "history",
+        {},
+    )
+
+    file_history = history.get(
+        "file_history",
+        {},
+    )
+
+    commits = file_history.get(
+        "commits",
+        [],
+    )
+
+    commit_lines = []
+
+    for commit in commits[:5]:
+        commit_lines.append(
+            f"- {commit.get('date')} "
+            f"{commit.get('commit')} "
+            f"{commit.get('message')}"
+        )
+
+    commit_text = "\n".join(
+        commit_lines
+    ) or "No commit evidence supplied."
+
+    production_count = retrieval_context.get(
+        "production_impact_count",
+        0,
+    )
+
+    test_count = retrieval_context.get(
+        "test_impact_count",
+        0,
+    )
+
+    risk_score = risk.get(
+        "score",
+        0,
+    )
+
+    risk_level = risk.get(
+        "level",
+        "UNKNOWN",
+    )
+
+    return f"""
+You are RepoTwin, an evidence-grounded software engineering assistant.
+
+Your job is to summarize ONLY the deterministic repository evidence supplied below.
+
+STRICT RULES:
+
+1. NEVER use pretrained knowledge about the repository.
+2. NEVER invent facts.
+3. NEVER infer that a Git commit changed the target symbol unless the supplied SYMBOL HISTORY explicitly proves it.
+4. NEVER say that a commit "added", "removed", "fixed", or "modified" the target unless the supplied evidence explicitly says so.
+5. NEVER recommend reverting a commit.
+6. NEVER invent bugs, vulnerabilities, versions, implementation details, dependencies, or causes.
+7. Numerical values in DETERMINISTIC ANALYSIS are authoritative and MUST be reproduced exactly.
+8. A test may only be called affected if it appears in RETRIEVED CODE-GRAPH EVIDENCE.
+9. If the evidence does not establish something, write:
+   "The supplied repository evidence does not establish this."
+10. Keep the answer concise.
+11. Do not use phrases such as "widespread use", "critical", "serious", "security vulnerability", or "data loss" unless those exact facts are explicitly supplied by the evidence.
+12. Do not turn a repository file-history commit into a claim about the target method.
+
+TARGET
+{target}
+
+DETERMINISTIC ANALYSIS
+
+Production impact count: {production_count}
+
+Test impact count: {test_count}
+
+Risk score: {risk_score}
+
+Risk level: {risk_level}
+
+IMPORTANT:
+These four values are deterministic facts.
+If you mention them, use the exact numbers above.
+
+GIT FILE HISTORY
+
+The following commits are file-history evidence only.
+They show that the file changed at these commits.
+They do NOT prove that the target method changed in those commits.
+
+{commit_text}
+
+SYMBOL HISTORY
+
+The supplied retrieval context may or may not contain symbol-specific history.
+
+If symbol-specific history is absent or does not explicitly identify a commit
+as changing the target symbol, do NOT attribute any file-history commit
+to the target symbol.
+
+RETRIEVED CODE-GRAPH EVIDENCE
+
+{evidence_text}
+
+USER QUESTION
+
+{retrieval_context.get("query", "")}
+
+ANSWER FORMAT
+
+1. Impact
+State the exact production impact count.
+If useful, mention direct/indirect callers only when those exact values
+are present in the deterministic analysis.
+
+2. Risk
+State the exact risk score and exact risk level.
+
+3. Affected tests
+State the exact test impact count.
+Only name individual tests that appear in the supplied evidence.
+
+4. Relevant history
+Describe only what the supplied Git history actually establishes.
+Do NOT claim that a listed commit changed the target method unless
+symbol history explicitly proves it.
+
+5. Recommendation
+Give only an evidence-based recommendation.
+A safe recommendation supported by impact/risk/test evidence is:
+"Review the change carefully and run the affected tests."
+Do not recommend reverting commits unless the evidence explicitly supports it.
+
+FINAL CHECK BEFORE ANSWERING:
+
+- Did I invent any fact?
+- Did I attribute a file-history commit to the target method?
+- Did I invent a test?
+- Did I change any deterministic number?
+- Did I recommend reverting something without evidence?
+
+If yes to any of these, remove that claim.
+
+Return only the five numbered sections.
+""".strip()
+
+
+def analyze_with_ollama(
+    retrieval_context: dict,
+    model: str = DEFAULT_MODEL,
+) -> dict:
+
+    prompt = build_engineering_prompt(
+        retrieval_context
+    )
+
+    answer = generate_with_ollama(
+        prompt,
+        model=model,
+    )
+
+    validation = validate_answer(
+        answer,
+        retrieval_context.get(
+            "evidence_package",
+            retrieval_context,
+        ),
+    )
+
+    return {
+        "model": model,
+        "answer": answer,
+        "validation": validation,
+    }
