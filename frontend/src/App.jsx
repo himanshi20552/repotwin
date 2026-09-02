@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import "./App.css";
 
 const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8000";
@@ -15,8 +15,8 @@ function App() {
     "What happens if Response.close is changed?"
   );
 
-  const [ragMode, setRagMode] = useState("rag"); // "rag", "non_rag", "compare"
-  const [selectedModel, setSelectedModel] = useState("codellama:7b");
+  const [ragMode, setRagMode] = useState("rag");
+  const [selectedModel, setSelectedModel] = useState("qwen2.5-coder:1.5b");
 
   const [analysis, setAnalysis] = useState(null);
   const [compareResult, setCompareResult] = useState(null);
@@ -38,6 +38,7 @@ function App() {
     setError("");
     setIndexing(true);
     setIndexStatus("");
+
     try {
       const res = await fetch(`${API_BASE}/repositories/index`, {
         method: "POST",
@@ -48,9 +49,14 @@ function App() {
           force_reindex: true,
         }),
       });
+
       const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || "Indexing failed.");
-      setIndexStatus(`✓ Indexed ${data.chunk_count} code chunks`);
+
+      if (!res.ok) {
+        throw new Error(data.detail || "Indexing failed.");
+      }
+
+      setIndexStatus(`Indexed ${data.chunk_count} code chunks`);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -105,26 +111,33 @@ function App() {
 
     try {
       if (ragMode === "compare") {
-        const response = await fetch(`${API_BASE}/repositories/rag-compare`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            repository_url: repositoryUrl,
-            repository_name: repositoryName,
-            target_id: selectedTarget.id,
-            question,
-            max_depth: 6,
-            top_k_chunks: 5,
-            model: selectedModel,
-          }),
-        });
+        const response = await fetch(
+          `${API_BASE}/repositories/rag-compare`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              repository_url: repositoryUrl,
+              repository_name: repositoryName,
+              target_id: selectedTarget.id,
+              question,
+              max_depth: 6,
+              top_k_chunks: 5,
+              model: selectedModel,
+            }),
+          }
+        );
 
         const data = await response.json();
+
         if (!response.ok) {
           throw new Error(
-            data.detail?.message || data.detail || "Comparison analysis failed."
+            data.detail?.message ||
+              data.detail ||
+              "Comparison analysis failed."
           );
         }
+
         setCompareResult(data);
       } else {
         const response = await fetch(
@@ -147,6 +160,7 @@ function App() {
         );
 
         const data = await response.json();
+
         if (!response.ok) {
           throw new Error(
             data.detail?.message ||
@@ -154,6 +168,7 @@ function App() {
               "Engineering analysis failed."
           );
         }
+
         setAnalysis(data);
       }
     } catch (err) {
@@ -165,136 +180,204 @@ function App() {
 
   const activeData = analysis || compareResult;
   const summary = activeData?.summary;
+
   const chunks =
-    analysis?.rag_chunks?.chunks || compareResult?.rag_chunks?.chunks || [];
+    analysis?.rag_chunks?.chunks ||
+    compareResult?.rag_chunks?.chunks ||
+    [];
+
+  const risk = Number(summary?.risk_score || 0);
 
   return (
     <div className="app-shell">
-      <header className="topbar">
-        <div className="brand">
-          <div className="brand-mark">R</div>
+
+      {/* SIDEBAR */}
+      <aside className="sidebar">
+        <div className="sidebar-brand">
+          <div className="logo-mark">R</div>
           <div>
-            <h1>RepoTwin</h1>
-            <span>Code Intelligence & RAG Analysis</span>
+            <strong>RepoTwin</strong>
+            <span>Code Intelligence</span>
           </div>
         </div>
 
-        <div className="status-indicators">
-          <div className="status">
-            <span
-              className={`status-dot ${
-                apiHealth?.status === "healthy" ? "online" : "offline"
-              }`}
-            />
-            {apiHealth?.status === "healthy" ? "API Online" : "API Offline"}
+        <nav className="sidebar-nav">
+          <div className="nav-label">WORKSPACE</div>
+
+          <button className="nav-item active">
+            <span>⌂</span>
+            Dashboard
+          </button>
+
+        </nav>
+
+        <div className="sidebar-bottom">
+          <div className="system-card">
+            <div className="system-header">
+              <span className="live-dot" />
+              System Status
+            </div>
+
+            <div className="system-row">
+              <span>API</span>
+              <strong>
+                {apiHealth?.status === "healthy" ? "Online" : "Offline"}
+              </strong>
+            </div>
+
+            <div className="system-row">
+              <span>Ollama</span>
+              <strong>
+                {apiHealth?.ollama?.available ? "Connected" : "Offline"}
+              </strong>
+            </div>
           </div>
 
-          <div className="status status-ollama">
-            <span
-              className={`status-dot ${
-                apiHealth?.ollama?.available ? "online" : "neutral"
-              }`}
-            />
-            Ollama:{" "}
-            {apiHealth?.ollama?.available ? "Connected" : "Not connected"}
-          </div>
+          <div className="sidebar-version">RepoTwin v1.0</div>
         </div>
-      </header>
+      </aside>
 
-      <main className="container">
-        <section className="hero-section">
+      {/* MAIN */}
+      <main className="main-content">
+
+        {/* TOP HEADER */}
+        <header className="dashboard-header">
           <div>
-            <p className="eyebrow">EXERCISES 1–5: KNOWLEDGE BASE + VECTOR RAG + CODE LLAMA</p>
+            <p className="breadcrumb">WORKSPACE / DASHBOARD</p>
+            <h1>Code Intelligence Dashboard</h1>
+          </div>
+
+          <div className="header-actions">
+            <div className="header-model">
+              <span className="model-dot" />
+              <span>Model</span>
+
+              <select
+                value={selectedModel}
+                onChange={(e) => setSelectedModel(e.target.value)}
+              >
+                <option value="qwen2.5-coder:1.5b">
+                  Qwen 2.5 Coder 1.5B
+                </option>
+                <option value="starcoder2:3b">
+                  StarCoder2 3B
+                </option>
+                <option value="codellama:7b">
+                  Code Llama 7B
+                </option>
+              </select>
+            </div>
+          </div>
+        </header>
+
+        {/* HERO / ANALYSIS INPUT */}
+        <section className="hero-card">
+          <div className="hero-content">
+            <div className="hero-badge">
+              <span>✦</span>
+              AI-POWERED REPOSITORY ANALYSIS
+            </div>
+
             <h2>
-              Evidence-Grounded Code Intelligence
+              Understand the impact
+              <br />
+              <span>before you change the code.</span>
             </h2>
-            <p className="hero-copy">
-              Combines AST-driven code chunking, vector similarity retrieval,
-              authoritative deterministic call-graphs, and Code Llama reasoning.
+
+            <p>
+              Analyze dependencies, callers, tests and repository context
+              using deterministic graph analysis and evidence-grounded AI.
             </p>
           </div>
-        </section>
 
-        {/* 01. Connect Repository */}
-        <section className="panel repository-panel">
-          <div className="panel-heading">
-            <div>
-              <p className="section-label">01 · REPOSITORY & KNOWLEDGE BASE</p>
-              <h3>Connect & Index Repository</h3>
-            </div>
-            <div className="action-buttons">
-              <button
-                className="secondary-button"
-                onClick={triggerIndexing}
-                disabled={indexing}
-              >
-                {indexing ? "Indexing chunks..." : "Build Vector Index"}
-              </button>
-              {indexStatus && <span className="index-badge">{indexStatus}</span>}
-            </div>
-          </div>
+          <div className="repository-input-card">
+            <div className="input-heading">
+              <div>
+                <span className="input-icon">⌘</span>
+                <div>
+                  <strong>Repository</strong>
+                  <small>Connect a GitHub repository</small>
+                </div>
+              </div>
 
-          <div className="form-grid">
-            <label>
-              <span>GitHub repository URL</span>
+              {indexStatus && (
+                <span className="success-pill">
+                  ✓ {indexStatus}
+                </span>
+              )}
+            </div>
+
+            <div className="repo-input-row">
               <input
                 value={repositoryUrl}
                 onChange={(e) => setRepositoryUrl(e.target.value)}
                 placeholder="https://github.com/owner/repository.git"
               />
-            </label>
 
-            <label>
-              <span>Repository name</span>
               <input
+                className="repo-name-input"
                 value={repositoryName}
                 onChange={(e) => setRepositoryName(e.target.value)}
-                placeholder="repository"
+                placeholder="Repository name"
               />
-            </label>
+
+              <button
+                className="secondary-button"
+                onClick={triggerIndexing}
+                disabled={indexing}
+              >
+                {indexing ? "Indexing..." : "Index Repository"}
+              </button>
+            </div>
+          </div>
+        </section>
+
+        {/* SEARCH / TARGET */}
+        <section className="workspace-card">
+          <div className="section-top">
+            <div>
+              <span className="section-number">01</span>
+              <div>
+                <h3>Find a code entity</h3>
+                <p>Search for a function, class or method to analyze.</p>
+              </div>
+            </div>
+
+            {targets.length > 0 && (
+              <span className="count-pill">
+                {targets.length} entities found
+              </span>
+            )}
           </div>
 
-          <div className="target-search">
-            <label>
-              <span>Search code entities</span>
+          <div className="search-row">
+            <div className="search-input">
+              <span>⌕</span>
               <input
                 value={targetSearch}
                 onChange={(e) => setTargetSearch(e.target.value)}
-                placeholder="close, Response, Session, include_router..."
+                placeholder="Search functions, classes, methods..."
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    discoverTargets();
-                  }
+                  if (e.key === "Enter") discoverTargets();
                 }}
               />
-            </label>
+            </div>
 
             <button
               className="primary-button"
               onClick={discoverTargets}
               disabled={loadingTargets}
             >
-              {loadingTargets ? "Discovering..." : "Discover targets"}
+              {loadingTargets ? "Searching..." : "Find Entities →"}
             </button>
           </div>
-        </section>
 
-        {/* 02. Target Selection */}
-        {targets.length > 0 && (
-          <section className="panel">
-            <div className="panel-heading">
-              <div>
-                <p className="section-label">02 · TARGET SELECTION</p>
-                <h3>Select a code entity</h3>
-              </div>
-              <span className="result-count">{targets.length} found</span>
-            </div>
-
-            <div className="target-list">
-              {targets.map((target) => (
+          {targets.length > 0 && (
+            <div className="targets-grid">
+              {targets.slice(0, 12).map((target) => (
                 <button
                   key={target.id}
-                  className={`target-card ${
+                  className={`entity-card ${
                     selectedTarget?.id === target.id ? "selected" : ""
                   }`}
                   onClick={() => {
@@ -303,7 +386,7 @@ function App() {
                     setCompareResult(null);
                   }}
                 >
-                  <div className="target-icon">
+                  <div className="entity-icon">
                     {target.type === "method"
                       ? "M"
                       : target.type === "class"
@@ -311,105 +394,117 @@ function App() {
                       : "F"}
                   </div>
 
-                  <div className="target-info">
+                  <div className="entity-info">
                     <strong>
                       {target.type === "method"
                         ? target.id.split(":").pop()
                         : target.name}
                     </strong>
+
                     <span>{target.file}</span>
-                    <small>{target.type}</small>
                   </div>
 
-                  <div className="target-arrow">→</div>
+                  <span className="entity-type">{target.type}</span>
                 </button>
               ))}
             </div>
-          </section>
-        )}
+          )}
+        </section>
 
-        {/* 03. Engineering Question & RAG Settings */}
+        {/* ANALYSIS CONFIGURATION */}
         {selectedTarget && (
-          <section className="panel question-panel">
-            <div className="panel-heading">
+          <section className="workspace-card analysis-config">
+            <div className="section-top">
               <div>
-                <p className="section-label">03 · RAG CONFIGURATION & QUESTION</p>
-                <h3>
-                  Analyze <code>{selectedTarget.name}</code>
-                </h3>
+                <span className="section-number">02</span>
+                <div>
+                  <h3>Configure analysis</h3>
+                  <p>Choose how RepoTwin should reason about this change.</p>
+                </div>
               </div>
             </div>
 
-            <div className="selected-target">
-              <span>{selectedTarget.type}</span>
-              <strong>{selectedTarget.id}</strong>
+            <div className="selected-entity">
+              <div className="entity-icon large">
+                {selectedTarget.type === "method"
+                  ? "M"
+                  : selectedTarget.type === "class"
+                  ? "C"
+                  : "F"}
+              </div>
+
+              <div>
+                <span>SELECTED ENTITY</span>
+                <strong>{selectedTarget.id}</strong>
+              </div>
             </div>
 
-            <div className="rag-controls-grid">
-              <div className="control-group">
-                <label className="control-label">RAG Mode</label>
-                <div className="button-group">
+            <div className="config-grid">
+
+              <div className="config-block">
+                <label>Analysis Mode</label>
+
+                <div className="mode-buttons">
                   <button
-                    type="button"
-                    className={`toggle-btn ${ragMode === "rag" ? "active" : ""}`}
+                    className={ragMode === "rag" ? "active" : ""}
                     onClick={() => setRagMode("rag")}
                   >
-                    With RAG (Grounded)
+                    <span>◈</span>
+                    <div>
+                      <strong>With RAG</strong>
+                      <small>Grounded in repository code</small>
+                    </div>
                   </button>
+
                   <button
-                    type="button"
-                    className={`toggle-btn ${ragMode === "non_rag" ? "active" : ""}`}
+                    className={ragMode === "non_rag" ? "active" : ""}
                     onClick={() => setRagMode("non_rag")}
                   >
-                    Without RAG (General LLM)
+                    <span>◇</span>
+                    <div>
+                      <strong>Without RAG</strong>
+                      <small>General model reasoning</small>
+                    </div>
                   </button>
+
                   <button
-                    type="button"
-                    className={`toggle-btn ${ragMode === "compare" ? "active" : ""}`}
+                    className={ragMode === "compare" ? "active" : ""}
                     onClick={() => setRagMode("compare")}
                   >
-                    Compare Side-by-Side
+                    <span>⇄</span>
+                    <div>
+                      <strong>Compare</strong>
+                      <small>RAG vs non-RAG</small>
+                    </div>
                   </button>
                 </div>
               </div>
 
-              <div className="control-group">
-                <label className="control-label">Model Selection</label>
-                <select
-                  className="model-select"
-                  value={selectedModel}
-                  onChange={(e) => setSelectedModel(e.target.value)}
+              <div className="config-block">
+                <label>Engineering Question</label>
+
+                <textarea
+                  value={question}
+                  onChange={(e) => setQuestion(e.target.value)}
+                  rows="5"
+                  placeholder="What happens if this function is modified?"
+                />
+
+                <button
+                  className="analyze-button"
+                  onClick={runAnalysis}
+                  disabled={loadingAnalysis}
                 >
-                  <option value="codellama:7b">Code Llama (codellama:7b) [Required]</option>
-                  <option value="qwen2.5-coder:1.5b">Qwen (qwen2.5-coder:1.5b) [Optional]</option>
-                </select>
+                  {loadingAnalysis
+                    ? "Running analysis..."
+                    : "Run Engineering Analysis  →"}
+                </button>
               </div>
             </div>
-
-            <label className="question-input-label">
-              <span>Engineering Question</span>
-              <textarea
-                value={question}
-                onChange={(e) => setQuestion(e.target.value)}
-                rows="3"
-                placeholder="e.g. What happens if this entity is modified?"
-              />
-            </label>
-
-            <button
-              className="primary-button analyze-button"
-              onClick={runAnalysis}
-              disabled={loadingAnalysis}
-            >
-              {loadingAnalysis
-                ? "Running Orchestration & Analysis..."
-                : ragMode === "compare"
-                ? "Run RAG vs Non-RAG Comparison →"
-                : "Run Engineering Analysis →"}
-            </button>
           </section>
         )}
 
+        {/* ERROR */}
         {error && (
           <div className="error-box">
             <strong>Analysis Error</strong>
@@ -417,42 +512,52 @@ function App() {
           </div>
         )}
 
-        {/* 04. Deterministic Authoritative Metrics */}
+        {/* RESULTS */}
         {activeData && (
           <>
-            <section className="results-header">
+            <div className="results-heading">
               <div>
-                <p className="section-label">04 · AUTHORITATIVE DETERMINISTIC IMPACT</p>
-                <h3>Deterministic Repository Metrics</h3>
+                <p>03 · ANALYSIS RESULTS</p>
+                <h2>Repository Impact</h2>
               </div>
-              <div className="validation-badge">
+
+              <div className="verified-pill">
                 <span>✓</span>
                 Deterministic Graph Verified
               </div>
-            </section>
+            </div>
 
+            {/* METRICS */}
             <section className="metrics-grid">
+
+              <Metric
+                label="Risk Score"
+                value={summary?.risk_score}
+                suffix="/100"
+                danger
+                large
+              />
+
               <Metric
                 label="Production Impact"
                 value={summary?.production_impact}
               />
+
               <Metric
                 label="Direct Callers"
                 value={summary?.direct_callers}
               />
+
               <Metric
                 label="Indirect Callers"
                 value={summary?.indirect_callers}
               />
+
               <Metric
                 label="Affected Tests"
                 value={summary?.affected_tests}
               />
-              <Metric
-                label="Risk Score"
-                value={summary?.risk_score}
-                danger
-              />
+
               <Metric
                 label="Risk Level"
                 value={summary?.risk_level}
@@ -460,40 +565,149 @@ function App() {
               />
             </section>
 
-            {/* 05. Retrieved Code Chunks Panel (Knowledge Base & Vector Similarity) */}
-            {chunks.length > 0 && (
-              <section className="panel chunks-panel">
-                <div className="panel-heading">
+            {/* IMPACT + AI */}
+            <div className="result-columns">
+
+              <section className="result-card">
+                <div className="result-card-header">
                   <div>
-                    <p className="section-label">VECTOR SEARCH & KNOWLEDGE BASE</p>
-                    <h3>Retrieved AST Code Chunks ({chunks.length})</h3>
+                    <span className="result-icon blue">◎</span>
+                    <div>
+                      <p>GRAPH ENGINE</p>
+                      <h3>Impact Analysis</h3>
+                    </div>
                   </div>
-                  <span className="kb-badge">Real Cosine Similarity</span>
+
+                  <span className="verified-small">VERIFIED</span>
                 </div>
 
-                <div className="chunks-list">
-                  {chunks.map((chunk, idx) => (
-                    <div className="chunk-card" key={idx}>
-                      <div className="chunk-header">
-                        <div className="chunk-title">
-                          <span className="chunk-type">{chunk.type}</span>
-                          <strong>{chunk.name}</strong>
-                          <span className="chunk-file">
-                            {chunk.file}:{chunk.start_line}-{chunk.end_line}
+                <div className="risk-display">
+                  <div
+                    className="risk-circle"
+                    style={{
+                      background: `conic-gradient(#5b7cff ${
+                        risk * 3.6
+                      }deg, #202638 0deg)`,
+                    }}
+                  >
+                    <div>
+                      <strong>{risk}</strong>
+                      <span>RISK</span>
+                    </div>
+                  </div>
+
+                  <div className="risk-details">
+                    <strong>{summary?.risk_level || "—"} Risk</strong>
+                    <span>
+                      Determined from repository dependency and impact
+                      analysis.
+                    </span>
+                  </div>
+                </div>
+
+                <div className="impact-stats">
+                  <div>
+                    <span>Direct</span>
+                    <strong>{summary?.direct_callers ?? "—"}</strong>
+                  </div>
+
+                  <div>
+                    <span>Indirect</span>
+                    <strong>{summary?.indirect_callers ?? "—"}</strong>
+                  </div>
+
+                  <div>
+                    <span>Tests</span>
+                    <strong>{summary?.affected_tests ?? "—"}</strong>
+                  </div>
+                </div>
+              </section>
+
+              <section className="result-card ai-result">
+                <div className="result-card-header">
+                  <div>
+                    <span className="result-icon purple">✦</span>
+                    <div>
+                      <p>LLM REASONING</p>
+                      <h3>AI Engineering Analysis</h3>
+                    </div>
+                  </div>
+
+                  <div className="ai-meta">
+                    <span>
+                      {analysis?.ai_analysis?.model ||
+                        selectedModel}
+                    </span>
+
+                    <ValidationBadge
+                      validation={analysis?.ai_analysis?.validation}
+                    />
+                  </div>
+                </div>
+
+                <div className="ai-answer">
+                  {analysis?.ai_analysis?.answer
+                    ?.split("\n")
+                    .map((line, index) => (
+                      <p key={index}>{line || "\u00A0"}</p>
+                    ))}
+
+                  {compareResult && (
+                    <Comparison
+                      result={compareResult}
+                    />
+                  )}
+                </div>
+              </section>
+            </div>
+
+            {/* RAG */}
+            {chunks.length > 0 && (
+              <section className="workspace-card rag-results">
+                <div className="section-top">
+                  <div>
+                    <span className="section-number">04</span>
+                    <div>
+                      <h3>Retrieved code context</h3>
+                      <p>
+                        AST-aware chunks retrieved from the repository
+                        knowledge base.
+                      </p>
+                    </div>
+                  </div>
+
+                  <span className="rag-pill">
+                    {chunks.length} chunks · cosine similarity
+                  </span>
+                </div>
+
+                <div className="chunks-grid">
+                  {chunks.map((chunk, index) => (
+                    <div className="code-card" key={index}>
+                      <div className="code-header">
+                        <div>
+                          <span className="code-type">
+                            {chunk.type}
                           </span>
+                          <strong>{chunk.name}</strong>
                         </div>
-                        <div className="chunk-score">
-                          Similarity:{" "}
-                          <strong>
-                            {(
-                              (chunk.similarity_score ?? 0) * 100
-                            ).toFixed(1)}
-                            %
-                          </strong>
-                        </div>
+
+                        <span className="similarity">
+                          {(
+                            (chunk.similarity_score ?? 0) * 100
+                          ).toFixed(1)}
+                          %
+                        </span>
                       </div>
-                      <pre className="chunk-code">
-                        <code>{chunk.source_code || chunk.text}</code>
+
+                      <div className="code-location">
+                        {chunk.file}:{chunk.start_line}-{chunk.end_line}
+                      </div>
+
+                      <pre>
+                        <code>
+                          {chunk.source_code || chunk.text}
+                        </code>
                       </pre>
                     </div>
                   ))}
@@ -501,130 +715,36 @@ function App() {
               </section>
             )}
 
-            {/* 06. Side-by-Side Comparison Mode */}
-            {compareResult && (
-              <section className="compare-grid">
-                <div className="panel compare-card">
-                  <div className="panel-heading">
-                    <div>
-                      <p className="section-label">WITH RAG</p>
-                      <h3>Evidence-Grounded Reasoning</h3>
-                    </div>
-                    <ValidationBadge
-                      validation={compareResult.with_rag?.validation}
-                    />
-                  </div>
-                  <div className="answer-box">
-                    <p className="answer-text">
-                      {compareResult.with_rag?.answer}
-                    </p>
-                  </div>
-                  {compareResult.with_rag?.error && (
-                    <small className="error-note">
-                      {compareResult.with_rag.error}
-                    </small>
-                  )}
-                </div>
-
-                <div className="panel compare-card">
-                  <div className="panel-heading">
-                    <div>
-                      <p className="section-label">WITHOUT RAG</p>
-                      <h3>Ungrounded General Model</h3>
-                    </div>
-                    <ValidationBadge
-                      validation={compareResult.without_rag?.validation}
-                    />
-                  </div>
-                  <div className="answer-box">
-                    <p className="answer-text">
-                      {compareResult.without_rag?.answer}
-                    </p>
-                  </div>
-                  {compareResult.without_rag?.error && (
-                    <small className="error-note">
-                      {compareResult.without_rag.error}
-                    </small>
-                  )}
-                </div>
-              </section>
-            )}
-
-            {/* 07. Single Mode AI Explanation */}
-            {analysis && (
-              <section className="panel ai-panel">
-                <div className="panel-heading">
-                  <div>
-                    <p className="section-label">
-                      {analysis.use_rag
-                        ? "RAG EVIDENCE-GROUNDED REASONING"
-                        : "NON-RAG GENERAL ANALYSIS"}
-                    </p>
-                    <h3>AI Engineering Analysis</h3>
-                  </div>
-                  <div className="panel-meta">
-                    <span className="model-label">
-                      Model: {analysis.ai_analysis?.model}
-                    </span>
-                    <ValidationBadge
-                      validation={analysis.ai_analysis?.validation}
-                    />
-                  </div>
-                </div>
-
-                <div className="answer">
-                  {analysis.ai_analysis?.answer
-                    ?.split("\n")
-                    .map((line, index) => (
-                      <p key={index}>{line || "\u00A0"}</p>
-                    ))}
-                </div>
-
-                {analysis.ai_analysis?.error && (
-                  <div className="notice-box">
-                    <strong>Integration Notice:</strong>{" "}
-                    {analysis.ai_analysis.error}
-                  </div>
-                )}
-              </section>
-            )}
-
-            {/* 08. Git History Evidence */}
+            {/* HISTORY */}
             {analysis?.analysis?.history && (
-              <section className="panel history-panel">
-                <div className="panel-heading">
+              <section className="workspace-card">
+                <div className="section-top">
                   <div>
-                    <p className="section-label">GIT HISTORY EVIDENCE</p>
-                    <h3>Repository & Symbol History</h3>
+                    <span className="section-number">05</span>
+                    <div>
+                      <h3>Git history</h3>
+                      <p>Historical evidence for the analyzed symbol.</p>
+                    </div>
                   </div>
                 </div>
 
-                <div className="history-section">
-                  <div className="history-heading">
-                    <span className="history-label">SYMBOL HISTORY</span>
-                    <strong>
-                      {analysis.analysis.history.symbol_history?.commit_count ??
-                        0}{" "}
-                      commit(s)
-                    </strong>
-                  </div>
+                <div className="commit-list">
+                  {analysis.analysis.history.symbol_history?.commits
+                    ?.length ? (
+                    analysis.analysis.history.symbol_history.commits.map(
+                      (commit) => (
+                        <div className="commit-row" key={commit.commit}>
+                          <span>{commit.date}</span>
 
-                  {analysis.analysis.history.symbol_history?.commits?.length ? (
-                    <div className="commit-list">
-                      {analysis.analysis.history.symbol_history.commits.map(
-                        (commit) => (
-                          <div className="commit-item" key={commit.commit}>
-                            <div className="commit-date">{commit.date}</div>
-                            <div className="commit-content">
-                              <strong>{commit.message}</strong>
-                              <code>{commit.commit}</code>
-                            </div>
+                          <div>
+                            <strong>{commit.message}</strong>
+                            <code>{commit.commit}</code>
                           </div>
-                        )
-                      )}
-                    </div>
+                        </div>
+                      )
+                    )
                   ) : (
-                    <p className="empty-history">
+                    <p className="muted">
                       No symbol-history evidence supplied.
                     </p>
                   )}
@@ -633,36 +753,107 @@ function App() {
             )}
           </>
         )}
+
+        <footer>
+          RepoTwin · Evidence-grounded code intelligence
+        </footer>
       </main>
     </div>
   );
 }
 
-function Metric({ label, value, danger = false }) {
+function Metric({
+  label,
+  value,
+  suffix = "",
+  danger = false,
+  large = false,
+}) {
   return (
-    <div className={`metric ${danger ? "metric-danger" : ""}`}>
+    <div className={`metric-card ${danger ? "danger" : ""}`}>
       <span>{label}</span>
-      <strong>{value ?? "—"}</strong>
+      <div>
+        <strong className={large ? "metric-large" : ""}>
+          {value ?? "—"}
+        </strong>
+        {suffix && <small>{suffix}</small>}
+      </div>
     </div>
   );
 }
 
-function ValidationBadge({ validation }) {
+function ValidationBadge({ validation, mode }) {
   if (!validation) return null;
-  const isSupported = validation.status === "SUPPORTED";
-  const isCaution = validation.status === "CAUTION";
+
+  const supported = validation.status === "SUPPORTED";
+  const caution = validation.status === "CAUTION";
+
+  let label = "! REVIEW";
+
+  if (mode === "rag") {
+    label = supported
+      ? "✓ REPOSITORY GROUNDED"
+      : caution
+      ? "⚠ CAUTION"
+      : "! REVIEW";
+  } else if (mode === "non-rag") {
+    label = "○ NO REPOSITORY CONTEXT";
+  } else {
+    label = supported
+      ? "✓ SUPPORTED"
+      : caution
+      ? "⚠ CAUTION"
+      : "! REVIEW";
+  }
+
   return (
     <span
-      className={`validation-tag ${
-        isSupported
-          ? "val-supported"
-          : isCaution
-          ? "val-caution"
-          : "val-review"
+      className={`validation ${
+        supported
+          ? "supported"
+          : caution
+          ? "caution"
+          : "review"
       }`}
     >
-      {isSupported ? "✓ SUPPORTED" : isCaution ? "⚠ CAUTION" : "! REVIEW"}
+      {label}
     </span>
+  );
+}
+
+function Comparison({ result }) {
+  return (
+    <div className="comparison">
+      <div className="comparison-panel rag-panel">
+        <div className="comparison-title">
+          <span>WITH RAG</span>
+        </div>
+
+        <div className="comparison-answer">
+          {result.with_rag?.answer || "No response."}
+        </div>
+
+        <ValidationBadge
+          validation={result.with_rag?.validation}
+          mode="rag"
+        />
+      </div>
+
+      <div className="comparison-panel non-rag-panel">
+        <div className="comparison-title">
+          <span>WITHOUT RAG</span>
+        </div>
+
+        <div className="comparison-answer">
+          {result.without_rag?.answer || "No response."}
+        </div>
+
+        <ValidationBadge
+          validation={result.without_rag?.validation}
+          mode="non-rag"
+        />
+      </div>
+    </div>
   );
 }
 

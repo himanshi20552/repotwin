@@ -83,7 +83,7 @@ def build_rag_prompt(retrieval_context: dict[str, Any]) -> str:
         )
     evidence_text = "\n".join(evidence_lines) or "No graph evidence supplied."
 
-    # Retrieved code chunks (RAG context)
+    # Retrieved code chunks
     chunk_lines = []
     for index, chunk in enumerate(code_chunks, start=1):
         meta = chunk.get("metadata", chunk)
@@ -92,7 +92,7 @@ def build_rag_prompt(retrieval_context: dict[str, Any]) -> str:
             f"Entity: {meta.get('entity_id') or meta.get('name')}\n"
             f"File: {meta.get('file')}:{meta.get('start_line', 1)}-{meta.get('end_line', 1)}\n"
             f"Type: {meta.get('type')}\n"
-            f"Source Code:\n{chunk.get('source_code', '')[:800]}\n"
+            f"Source Code:\n{chunk.get('source_code', '')[:1200]}\n"
         )
     code_chunks_text = "\n".join(chunk_lines) or "No code chunks retrieved."
 
@@ -120,8 +120,16 @@ def build_rag_prompt(retrieval_context: dict[str, Any]) -> str:
     return f"""
 You are RepoTwin, an AI code intelligence assistant.
 
-You are analyzing a proposed change to a codebase.
-You must answer using ONLY the supplied deterministic facts, Git history, graph evidence, and retrieved code chunks below.
+You are analyzing a proposed change to a software repository.
+
+Your task is to provide a DETAILED, repository-grounded engineering analysis.
+
+Use the supplied deterministic analysis, code graph evidence, retrieved source code,
+and Git history as your evidence.
+
+Do NOT invent files, functions, callers, tests, commits, dependencies, or behavior.
+If the supplied evidence does not establish something, explicitly say that it is not
+established by the repository evidence.
 
 TARGET ENTITY:
 {target}
@@ -134,7 +142,7 @@ DETERMINISTIC FACTS (AUTHORITATIVE):
 - Risk score = {risk_score}
 - Risk level = {risk_level}
 
-RETRIEVED CODE CHUNKS (RAG KNOWLEDGE BASE):
+RETRIEVED CODE CHUNKS:
 {code_chunks_text}
 
 FILE HISTORY:
@@ -149,23 +157,66 @@ CODE-GRAPH EVIDENCE:
 USER QUESTION:
 {retrieval_context.get("query", "")}
 
-STRICT RULES:
-1. Use ONLY the supplied deterministic facts and evidence.
-2. The IMPACT section must contain ONLY the exact production impact, direct caller, and indirect caller numbers.
-3. The RISK section must contain ONLY the exact risk score and risk level.
-4. The AFFECTED TESTS section must contain ONLY the exact test count.
-5. If SYMBOL HISTORY does not establish a requested historical fact, say exactly:
-   "The supplied repository evidence does not establish this."
-6. Recommendation must state: "Review the change carefully and run the affected tests."
+RESPONSE FORMAT:
 
-ANSWER FORMAT:
-Return these five sections:
 1. Impact
+
+State the exact production impact count, direct caller count, and indirect caller
+count from the deterministic analysis.
+
+Then explain what the available repository evidence indicates about the impact.
+Use specific files, functions, entities, relationships, and retrieved source code
+when they are actually present in the supplied evidence.
+
+Explain how the proposed change could propagate through the repository based only
+on the supplied dependency information.
+
 2. Risk
-3. Affected tests
-4. Relevant history
+
+State the exact risk score and risk level.
+
+Then explain WHY the repository analysis considers the change risky. Discuss the
+available dependency relationships, production impact, affected files, and graph
+evidence when supported by the supplied data.
+
+Do not change or recalculate the deterministic risk score.
+
+3. Affected Tests
+
+State the exact affected test count.
+
+Then explain what the supplied repository evidence indicates about the affected
+tests. Mention specific test files or test entities only when they appear in the
+evidence.
+
+4. Relevant History
+
+Summarize relevant file or symbol history from the supplied Git history.
+
+Explain why a commit is relevant only when that relevance is supported by the
+provided history.
+
+If the history does not establish a useful historical fact, say:
+"The supplied repository evidence does not establish this."
+
 5. Recommendation
-""".strip()
+
+Give a concise repository-specific recommendation based on the evidence.
+
+The recommendation must include:
+"Review the change carefully and run the affected tests."
+
+GROUNDING RULES:
+
+- Deterministic numbers are authoritative and must be preserved exactly.
+- Retrieved repository evidence takes priority over general model knowledge.
+- Do not make generic claims when repository evidence is available.
+- Do not invent repository details.
+- Clearly distinguish repository evidence from general engineering reasoning.
+- Provide useful explanation rather than merely repeating the deterministic summary.
+- The answer should be detailed enough to explain the reasoning behind the impact
+  and risk assessment.
+"""
 
 
 def build_non_rag_prompt(target: dict[str, Any], query: str) -> str:
@@ -249,7 +300,7 @@ def analyze_with_ollama(
             prompt=prompt,
             model=model_to_use,
             base_url=base_url,
-            timeout=30,
+            timeout=180,
         )
         ollama_available = True
     except Exception as exc:
