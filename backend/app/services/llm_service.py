@@ -12,7 +12,7 @@ def get_ollama_base_url() -> str:
 
 
 def get_default_model() -> str:
-    return os.getenv("OLLAMA_MODEL", "codellama:7b")
+    return os.getenv("OLLAMA_MODEL", "opencoder:1.5b")
 
 
 def check_ollama_health(base_url: str | None = None) -> dict[str, Any]:

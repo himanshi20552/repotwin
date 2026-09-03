@@ -346,7 +346,7 @@ def model_compare(request: RagCompareRequest):
         models = [
             "qwen2.5-coder:1.5b",
             "starcoder2:3b",
-            "codellama:7b",
+            "opencoder:1.5b",
         ]
 
         results = []
