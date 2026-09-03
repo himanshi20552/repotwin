@@ -301,6 +301,123 @@ def engineering_analysis(request: EngineeringAnalysisRequest):
         raise HTTPException(status_code=500, detail=str(exc))
 
 
+
+@app.post("/repositories/model-compare")
+def model_compare(request: RagCompareRequest):
+    """
+    Week 4 model evaluation endpoint.
+    Runs the same repository question and RAG pipeline
+    against multiple configured LLMs.
+    """
+    try:
+        import time
+
+        repository_path = clone_repository(
+            request.repository_url,
+            request.repository_name,
+        )
+
+        graph = build_unified_graph(str(repository_path))
+
+        evidence = build_evidence_package(
+            graph,
+            request.target_id,
+            request.max_depth,
+        )
+
+        if not evidence.get("found"):
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "message": "Target entity not found.",
+                    "target_id": request.target_id,
+                },
+            )
+
+        context = assemble_rag_context(
+            evidence_package=evidence,
+            query=request.question,
+            repository_path=str(repository_path),
+            repository_name=request.repository_name,
+            top_k_chunks=request.top_k_chunks,
+        )
+
+        # Models used for the Week 4 comparison.
+        models = [
+            "qwen2.5-coder:1.5b",
+            "starcoder2:3b",
+            "codellama:7b",
+        ]
+
+        results = []
+
+        for model in models:
+            start_time = time.perf_counter()
+
+            try:
+                result = analyze_with_ollama(
+                    context,
+                    model=model,
+                    use_rag=True,
+                )
+
+                elapsed = time.perf_counter() - start_time
+
+                results.append({
+                    "model": model,
+                    "response_time_seconds": round(elapsed, 2),
+                    "answer": result.get("answer"),
+                    "validation": result.get("validation"),
+                    "ollama_available": result.get("ollama_available"),
+                    "mode": result.get("mode"),
+                    "error": result.get("error"),
+                })
+
+            except Exception as model_error:
+                elapsed = time.perf_counter() - start_time
+
+                results.append({
+                    "model": model,
+                    "response_time_seconds": round(elapsed, 2),
+                    "answer": None,
+                    "validation": None,
+                    "ollama_available": False,
+                    "mode": "rag",
+                    "error": str(model_error),
+                })
+
+        analysis = evidence.get("analysis", {})
+        production = analysis.get("production_impact", {})
+        tests = analysis.get("test_impact", {})
+        risk = analysis.get("risk", {})
+
+        return {
+            "repository": request.repository_name,
+            "target": evidence.get("target", {}),
+            "question": request.question,
+
+            "summary": {
+                "production_impact": production.get("count", 0),
+                "direct_callers": len(production.get("direct", [])),
+                "indirect_callers": len(production.get("indirect", [])),
+                "affected_tests": tests.get("count", 0),
+                "risk_score": risk.get("score", 0),
+                "risk_level": risk.get("level", "UNKNOWN"),
+            },
+
+            "rag_chunks": {
+                "count": context.get("retrieved_chunks_count", 0),
+                "chunks": context.get("retrieved_code_chunks", []),
+            },
+
+            "models": results,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
 @app.post("/repositories/rag-compare")
 def rag_compare(request: RagCompareRequest):
     """

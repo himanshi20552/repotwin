@@ -1470,3 +1470,145 @@ footer {
   }
 }
 
+
+/* Model Comparison */
+
+.compare-models-button {
+  width: 100%;
+  margin-top: 12px;
+  padding: 14px 18px;
+  border: 1px solid #334155;
+  border-radius: 10px;
+  background: transparent;
+  color: #cbd5e1;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: 0.2s ease;
+}
+
+.compare-models-button:hover:not(:disabled) {
+  background: #1e293b;
+  border-color: #64748b;
+  color: #ffffff;
+}
+
+.compare-models-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.model-comparison {
+  margin-top: 24px;
+}
+
+.model-comparison-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-top: 24px;
+}
+
+.model-card {
+  min-width: 0;
+  padding: 20px;
+  border: 1px solid #263244;
+  border-radius: 14px;
+  background: #0f172a;
+}
+
+.model-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.model-card-header div {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.model-card-header strong {
+  font-size: 14px;
+  color: #f8fafc;
+  overflow-wrap: anywhere;
+}
+
+.model-card-header span {
+  font-size: 11px;
+  color: #64748b;
+}
+
+.model-status {
+  white-space: nowrap;
+  font-size: 11px !important;
+  font-weight: 700;
+}
+
+.model-status.available {
+  color: #86efac !important;
+}
+
+.model-status.unavailable {
+  color: #fca5a5 !important;
+}
+
+.model-metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.model-metrics > div {
+  padding: 12px;
+  border-radius: 9px;
+  background: #111c2e;
+}
+
+.model-metrics span {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #64748b;
+}
+
+.model-metrics strong {
+  font-size: 13px;
+  color: #e2e8f0;
+}
+
+.model-answer {
+  max-height: 340px;
+  overflow-y: auto;
+  padding-top: 16px;
+  border-top: 1px solid #1e293b;
+}
+
+.model-answer p {
+  margin: 0 0 10px;
+  color: #cbd5e1;
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.model-answer p:last-child {
+  margin-bottom: 0;
+}
+
+.model-error {
+  color: #fca5a5 !important;
+}
+
+@media (max-width: 1000px) {
+  .model-comparison-grid {
+    grid-template-columns: 1fr;
+  }
+}
+

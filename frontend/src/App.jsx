@@ -20,6 +20,8 @@ function App() {
 
   const [analysis, setAnalysis] = useState(null);
   const [compareResult, setCompareResult] = useState(null);
+  const [modelCompareResult, setModelCompareResult] = useState(null);
+  const [loadingModelComparison, setLoadingModelComparison] = useState(false);
   const [loadingTargets, setLoadingTargets] = useState(false);
   const [loadingAnalysis, setLoadingAnalysis] = useState(false);
   const [indexing, setIndexing] = useState(false);
@@ -71,6 +73,7 @@ function App() {
     setSelectedTarget(null);
     setAnalysis(null);
     setCompareResult(null);
+    setModelCompareResult(null);
 
     try {
       const params = new URLSearchParams({
@@ -108,6 +111,7 @@ function App() {
     setLoadingAnalysis(true);
     setAnalysis(null);
     setCompareResult(null);
+    setModelCompareResult(null);
 
     try {
       if (ragMode === "compare") {
@@ -175,6 +179,51 @@ function App() {
       setError(err.message);
     } finally {
       setLoadingAnalysis(false);
+    }
+  }
+
+  async function compareModels() {
+    if (!selectedTarget) {
+      setError("Select a target first.");
+      return;
+    }
+
+    setError("");
+    setLoadingModelComparison(true);
+    setModelCompareResult(null);
+
+    try {
+      const response = await fetch(
+        `${API_BASE}/repositories/model-compare`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            repository_url: repositoryUrl,
+            repository_name: repositoryName,
+            target_id: selectedTarget.id,
+            question,
+            max_depth: 6,
+            top_k_chunks: 5,
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.detail?.message ||
+            data.detail ||
+            "Model comparison failed."
+        );
+      }
+
+      setModelCompareResult(data);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoadingModelComparison(false);
     }
   }
 
@@ -493,13 +542,98 @@ function App() {
                 <button
                   className="analyze-button"
                   onClick={runAnalysis}
-                  disabled={loadingAnalysis}
+                  disabled={loadingAnalysis || loadingModelComparison}
                 >
                   {loadingAnalysis
                     ? "Running analysis..."
                     : "Run Engineering Analysis  →"}
                 </button>
+
+                <button
+                  className="compare-models-button"
+                  onClick={compareModels}
+                  disabled={loadingModelComparison || loadingAnalysis}
+                >
+                  {loadingModelComparison
+                    ? "Comparing models..."
+                    : "⇄ Compare 3 Models"}
+                </button>
               </div>
+            </div>
+          </section>
+        )}
+
+        {/* MODEL COMPARISON */}
+        {modelCompareResult && (
+          <section className="workspace-card model-comparison">
+            <div className="section-top">
+              <div>
+                <span className="section-number">03</span>
+                <div>
+                  <h3>Model Comparison</h3>
+                  <p>
+                    Same repository context and question evaluated across
+                    three coding models.
+                  </p>
+                </div>
+              </div>
+
+              <span className="count-pill">
+                {modelCompareResult.models?.length || 0} models
+              </span>
+            </div>
+
+            <div className="model-comparison-grid">
+              {modelCompareResult.models?.map((result) => (
+                <div className="model-card" key={result.model}>
+                  <div className="model-card-header">
+                    <div>
+                      <strong>{result.model}</strong>
+                      <span>RAG evaluation</span>
+                    </div>
+
+                    <span
+                      className={`model-status ${
+                        result.ollama_available
+                          ? "available"
+                          : "unavailable"
+                      }`}
+                    >
+                      {result.ollama_available
+                        ? "● Available"
+                        : "● Unavailable"}
+                    </span>
+                  </div>
+
+                  <div className="model-metrics">
+                    <div>
+                      <span>RESPONSE TIME</span>
+                      <strong>
+                        {result.response_time_seconds}s
+                      </strong>
+                    </div>
+
+                    <div>
+                      <span>GROUNDING</span>
+                      <strong>
+                        {result.validation?.status || "N/A"}
+                      </strong>
+                    </div>
+                  </div>
+
+                  <div className="model-answer">
+                    {result.answer
+                      ? result.answer.split("\n").map((line, index) => (
+                          <p key={index}>{line || "\u00A0"}</p>
+                        ))
+                      : (
+                        <p className="model-error">
+                          {result.error || "No response generated."}
+                        </p>
+                      )}
+                  </div>
+                </div>
+              ))}
             </div>
           </section>
         )}
