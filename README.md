@@ -1,382 +1,463 @@
 # RepoTwin
 
-**RepoTwin** is an engineering-grade code intelligence platform that combines deterministic static analysis (AST/call graph, Git history, risk scoring) with a full RAG (Retrieval-Augmented Generation) pipeline powered by **Code Llama via Ollama**.
+### Repository Intelligence and Code Understanding
 
-It answers the question: *"If I change this function, what breaks in production — and what does the AI say about it?"*
+RepoTwin is a repository analysis tool that builds a structured view of a software codebase and uses it to answer questions about the repository.
 
----
+Instead of treating a repository as a collection of text files, RepoTwin combines source-code analysis, dependency relationships, repository history, retrieval, and local LLMs to build a more useful picture of how the codebase is organized and how its components relate to each other.
 
-## Architecture Overview
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        React / Vite Frontend                     │
-│  RAG Mode Selector │ Model Selector │ Chunk Viewer │ Compare     │
-└───────────────────────────┬─────────────────────────────────────┘
-                            │ HTTP (Vite proxy → localhost:8000)
-┌───────────────────────────▼─────────────────────────────────────┐
-│                     FastAPI Backend (Uvicorn)                    │
-│                                                                  │
-│  ┌──────────────────────────────────────────────────────────┐   │
-│  │             Deterministic Analysis Engine                 │   │
-│  │  Repository Graph → Call Graph → Risk Scorer             │   │
-│  │  Git History → Evidence Retrieval → Evidence Validator    │   │
-│  │  Test Impact (tests never counted as production)          │   │
-│  └──────────────────────────────────────────────────────────┘   │
-│                                                                  │
-│  ┌──────────────────────────────────────────────────────────┐   │
-│  │                  RAG Pipeline (Exercises 2-4)             │   │
-│  │  AST Chunker → Embedding Service → Vector Store           │   │
-│  │  RAG Service → Prompt Builder → LLM Service (Ollama)     │   │
-│  └──────────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────────┘
-                            │
-              ┌─────────────┴───────────────┐
-              │                             │
-   ┌──────────▼──────────┐     ┌────────────▼────────────┐
-   │  Ollama (Code Llama) │     │  Git / GitHub Repos      │
-   │  codellama:7b        │     │  Cloned to data/repos/   │
-   └─────────────────────┘     └─────────────────────────┘
-```
+The goal is to make large or unfamiliar repositories easier to understand, explore, and reason about.
 
 ---
 
-## Exercises Mapping
+## What RepoTwin Does
 
-### Exercise 1 — Application + API + Ollama + Code Llama
+RepoTwin takes a Git repository and analyzes it from several perspectives:
 
-**Service**: [`backend/app/services/llm_service.py`](backend/app/services/llm_service.py)
+- Repository structure and source files
+- Python AST information
+- Classes, functions, and methods
+- Dependencies and relationships between components
+- Call-graph information
+- Potential change impact
+- Risk and test impact
+- Git history
+- Semantic code retrieval
+- LLM-based repository questions
 
-- Integrates with **Ollama** via `OLLAMA_BASE_URL` (default: `http://localhost:11434`)
-- Default model: **`codellama:7b`** (Code Llama, as required by the assignment)
-- Provides `check_ollama_health()` — reports availability without silent fallback
-- If Code Llama is unavailable, the integration is reported as unavailable (never substituted silently)
-- `qwen2.5-coder:1.5b` is available as an **explicit optional model** only
-- Generates grounded RAG prompts that incorporate deterministic facts (production impact, risk score, direct/indirect callers, affected tests)
-- Generates ungrounded non-RAG prompts for side-by-side comparison
-
-**API Endpoints**:
-- `GET /health` — reports Ollama availability and available models
-- `POST /repositories/engineering-analysis` — run analysis with LLM response (RAG or non-RAG mode)
-
----
-
-### Exercise 2 — Knowledge Base + Chunking
-
-**Service**: [`backend/app/services/chunking_service.py`](backend/app/services/chunking_service.py)
-
-- Parses Python files using the built-in `ast` module (no external dependencies)
-- Produces **code-aware AST chunks** — not line-split or token-split
-- Chunk types: `class`, `method`, `function`, `module`
-- Each chunk captures:
-  - `chunk_id` — unique identifier
-  - `chunk_type` — class / method / function / module
-  - `name` — symbol name
-  - `source_code` — full extracted source text
-  - `docstring` — extracted from AST (if present)
-  - `start_line`, `end_line` — accurate line numbers
-  - `file_path`, `repo_name` — provenance metadata
-- Module-level chunks include top-level imports and statements
-
-**API Endpoint**:
-- `POST /repositories/index` — triggers AST chunking + vector indexing for a cloned repository
+The resulting information is combined into an analysis context that can be used by an LLM to answer repository-specific questions.
 
 ---
 
-### Exercise 3 — Embeddings + Vector Store
+## Why RepoTwin?
 
-**Services**:
-- [`backend/app/services/embedding_service.py`](backend/app/services/embedding_service.py)
-- [`backend/app/services/vector_store.py`](backend/app/services/vector_store.py)
+Understanding an unfamiliar codebase usually requires jumping between files, searching for definitions, tracing dependencies, and looking through Git history.
 
-**Embedding Service**:
-- Uses `sentence-transformers` with `all-MiniLM-L6-v2` (384 dimensions)
-- Model is configurable via `EMBEDDING_MODEL` environment variable
-- Lazy-loads the model on first use to minimize startup time
-- Produces **L2-normalized embeddings** for exact cosine similarity via dot product
+A simple LLM prompt does not have access to all of this information and can easily miss relationships between files.
 
-**Vector Store**:
-- Pure NumPy-based — no external vector DB required
-- Cosine similarity via dot product on normalized vectors: `np.dot(embeddings, q_vec)`
-- Top-k retrieval with similarity scores
-- Supports metadata filtering (by `repo_name`, `chunk_type`, etc.)
-- File-based persistence: `.json` (metadata) + `.npy` (embeddings) per repository
-- Index stored in `backend/data/indexes/` (Git-ignored)
+RepoTwin takes a different approach:
 
----
+```text
+Repository
+    |
+    +-- Source Code
+    |      |
+    |      +-- AST Analysis
+    |      +-- Classes / Functions
+    |      +-- Dependencies
+    |
+    +-- Repository Graph
+    |      |
+    |      +-- Calls
+    |      +-- Relationships
+    |      +-- Impact Analysis
+    |
+    +-- Git History
+    |
+    +-- Code Retrieval
+           |
+           +-- Chunking
+           +-- Embeddings
+           +-- Vector Search
+                    |
+                    v
+                  Ollama
+                    |
+                    v
+             Repository-aware Answer
 
-### Exercise 4 — RAG Pipeline + APIs
+The LLM is given structured repository evidence and retrieved code instead of relying only on the question itself.
 
-**Service**: [`backend/app/services/rag_service.py`](backend/app/services/rag_service.py)
+Core Features
+Repository Analysis
 
-The RAG orchestrator:
-1. Checks if a vector index exists for the repository; if not, builds it
-2. Embeds the user's query
-3. Retrieves top-k semantically similar AST code chunks
-4. Assembles RAG context combining:
-   - **Deterministic evidence** (production impact, risk score, direct/indirect callers, affected tests, Git commits)
-   - **Retrieved code chunks** with similarity scores
-5. Builds the grounded RAG prompt for Code Llama
-6. Optionally builds an ungrounded non-RAG prompt for comparison
+Repositories can be imported and analyzed from their Git URL.
 
-**API Endpoints (all in [`backend/app/main.py`](backend/app/main.py))**:
+RepoTwin builds information about:
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/` | Root info with Ollama status |
-| `GET` | `/health` | Health check — Ollama, embedding model, service status |
-| `GET` | `/repositories/targets` | List pre-configured analysis targets |
-| `POST` | `/repositories/index` | Explicit chunk + vector index for a repo |
-| `POST` | `/repositories/engineering-analysis` | Full analysis: deterministic + LLM (RAG or non-RAG) |
-| `POST` | `/repositories/rag-compare` | Side-by-side RAG vs. non-RAG comparison |
+Files
+Classes
+Functions
+Methods
+Imports
+Relationships
+Repository structure
+Code and Dependency Graph
 
-**Request body for `/repositories/engineering-analysis`**:
-```json
-{
-  "repo_url": "https://github.com/psf/requests",
-  "symbol": "method:src/requests/models.py:Response.close",
-  "use_rag": true,
-  "model": "codellama:7b",
-  "top_k": 5
-}
-```
+RepoTwin builds a graph representation of the repository.
 
-**Response includes**:
-- `production_impact`, `direct_callers`, `indirect_callers`, `affected_tests`, `risk_score`, `risk_level` (deterministic, authoritative)
-- `llm_response` — Code Llama's grounded answer
-- `retrieved_chunks` — AST chunks used with similarity scores
-- `validation_result` — evidence validation report
+The graph can be used to reason about relationships between components, including:
 
----
+Function calls
+Class relationships
+Module dependencies
+Call paths
+Connected components
 
-### Exercise 5 — Docker + Containerization
+This provides a structural view of the codebase in addition to the raw source code.
 
-**Files**:
-- [`backend/Dockerfile`](backend/Dockerfile) — Python 3.11-slim, installs system Git, runs Uvicorn
-- [`frontend/Dockerfile`](frontend/Dockerfile) — Multi-stage: Node 20 builder → Nginx serving
-- [`docker-compose.yml`](docker-compose.yml) — Orchestrates backend + frontend
+Impact Analysis
 
-**Run with Docker Compose**:
-```bash
+Given a repository component, RepoTwin can trace related components and estimate what parts of the codebase may be affected by a change.
+
+This is useful for questions such as:
+
+What parts of the repository depend on this function?
+
+or:
+
+What could be affected if this component changes?
+
+Risk and Test Impact Analysis
+
+Repository analysis is combined with dependency and test information to identify potentially affected areas and related tests.
+
+This helps connect code changes with their possible consequences elsewhere in the repository.
+
+Git History
+
+RepoTwin also uses repository history as an additional source of information.
+
+Git history can provide context about:
+
+Previous changes
+Commits
+Frequently modified areas
+Historical changes to relevant files
+
+This adds a time dimension to repository understanding rather than looking only at the current source tree.
+
+Repository-Aware RAG
+
+RepoTwin includes a retrieval pipeline for finding relevant parts of a codebase.
+
+The pipeline is roughly:
+
+Repository
+    |
+    v
+Code Chunking
+    |
+    v
+Embeddings
+    |
+    v
+Vector Store
+    |
+    v
+Semantic Retrieval
+    |
+    v
+Relevant Code Context
+    |
+    v
+LLM
+
+For a user question, RepoTwin retrieves code that is semantically related to the question and combines it with the other repository evidence before generating an answer.
+
+This helps the model focus on the actual implementation rather than relying only on its pretrained knowledge.
+
+LLM Integration
+
+RepoTwin currently uses Ollama to run local language models.
+
+The LLM layer is separated from the repository analysis components, so the repository analysis pipeline does not depend directly on a particular model.
+
+Models can be selected through configuration.
+
+Example models used during development and evaluation include:
+
+qwen2.5-coder:1.5b
+starcoder2:3b
+opencoder:1.5b
+
+The LLM receives repository-specific context assembled by RepoTwin and produces the final explanation or response.
+
+Evaluation and Benchmarking
+
+RepoTwin includes an evaluation pipeline for measuring how well code-focused LLMs understand a repository.
+
+The benchmark contains questions covering:
+
+Explanation
+Code Retrieval
+Dependency Understanding
+Bug Analysis
+Code Generation
+Refactoring
+RAG based Question
+
+The evaluation pipeline supports comparing multiple models using the same questions and repository.
+
+It can also compare RAG and non-RAG configurations.
+
+Metrics collected include:
+
+Correctness
+Retrieval precision and recall
+Hallucination indicators
+Response latency
+Prompt and output token counts
+Tokens per second
+CPU usage
+Memory usage
+GPU memory usage when available
+Python syntax validation for generated code
+
+Evaluation results are saved incrementally so longer experiments can be resumed if interrupted.
+
+Architecture
+
+RepoTwin is organized as a modular FastAPI application.
+
+backend/
+├── app/
+│   ├── analysis/
+│   │   ├── evidence.py
+│   │   └── test_impact.py
+│   │
+│   ├── analyzers/
+│   │   └── python_analyzer.py
+│   │
+│   ├── graph/
+│   │   ├── call_graph.py
+│   │   ├── impact.py
+│   │   ├── repository_graph.py
+│   │   ├── repository_twin.py
+│   │   ├── risk.py
+│   │   ├── typed_graph.py
+│   │   └── unified_graph.py
+│   │
+│   ├── history/
+│   │   └── git_history.py
+│   │
+│   ├── retrieval/
+│   │   └── evidence_retriever.py
+│   │
+│   ├── services/
+│   │   ├── chunking_service.py
+│   │   ├── embedding_service.py
+│   │   ├── llm_service.py
+│   │   ├── rag_service.py
+│   │   ├── repository_analyzer.py
+│   │   ├── repository_service.py
+│   │   └── vector_store.py
+│   │
+│   └── validation/
+│       └── evidence_validator.py
+│
+├── evaluation/
+│   ├── dataset.json
+│   ├── ground_truth.json
+│   ├── evaluator.py
+│   ├── scoring.py
+│   ├── metrics.py
+│   ├── analyze_results.py
+│   ├── resource_monitor.py
+│   ├── code_validator.py
+│   └── setup_repo.py
+│
+├── requirements.txt
+└── Dockerfile
+
+frontend/
+└── src/
+    └── App.jsx
+
+The backend is built as one FastAPI application with separate logical services rather than a collection of independently deployed microservices.
+
+Main Components
+Component	Responsibility
+Repository Service	Cloning and managing repositories
+Python Analyzer	Extracting source-code information
+Graph Engine	Building repository and call relationships
+Evidence Analysis	Combining repository analysis results
+Impact Analysis	Finding potentially affected components
+Risk Analysis	Identifying potentially risky areas
+Git History	Working with repository history
+Chunking Service	Splitting source code into retrieval units
+Embedding Service	Converting code/text into vectors
+Vector Store	Storing and searching embeddings
+RAG Service	Retrieving and assembling relevant context
+LLM Service	Building prompts and communicating with Ollama
+Validation	Checking generated claims against repository evidence
+Tech Stack
+Backend
+Python
+FastAPI
+Pydantic
+GitPython
+NetworkX
+AI / Retrieval
+Ollama
+Sentence Transformers
+Vector-based semantic retrieval
+RAG
+Frontend
+React
+Vite
+JavaScript
+Bootstrap
+Infrastructure
+Docker
+Docker Compose
+Git
+Running with Docker
+Prerequisites
+
+Make sure the following are installed:
+
+Docker
+Docker Compose
+Ollama
+Git
+
+Pull the models you want to use:
+
+ollama pull qwen2.5-coder:1.5b
+ollama pull starcoder2:3b
+ollama pull opencoder:1.5b
+Start the application
+
+Clone the repository:
+
+git clone https://github.com/himanshi20552/repotwin.git
+cd repotwin
+
+Create your environment file:
+
 cp .env.example .env
-# Edit .env with your OLLAMA_BASE_URL
-docker-compose up --build
-```
 
-Services:
-- Frontend: `http://localhost:3000`
-- Backend: `http://localhost:8000`
-- API Docs: `http://localhost:8000/docs`
+Then start the services:
 
----
+docker compose up -d --build
+Configuration
 
-## Setup & Running Locally
+RepoTwin uses environment variables for configuration.
 
-### Prerequisites
+Important settings include:
 
-- Python 3.11+
-- Node.js 18+
-- Git
-- [Ollama](https://ollama.ai/) with `codellama:7b` pulled:
-  ```bash
-  ollama pull codellama:7b
-  ```
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL=opencoder:1.5b
+EMBEDDING_MODEL=all-MiniLM-L6-v2
 
-### Backend
+When running the backend inside Docker while Ollama runs on the host, Docker uses:
 
-```bash
-cd backend
-python -m venv .venv
-# Windows:
-.venv\Scripts\activate
-# Linux/macOS:
-source .venv/bin/activate
+http://host.docker.internal:11434
 
-pip install -r requirements.txt
-cp ../.env.example ../.env   # edit as needed
-uvicorn app.main:app --reload --port 8000
-```
+The Docker Compose configuration handles this without requiring the host machine's IP address to be hardcoded into the application.
 
-### Frontend
+Evaluation
 
-```bash
-cd frontend
-npm install
-npm run dev    # dev server at http://localhost:5173
-npm run build  # production build to dist/
-```
+The evaluation tools are located under:
 
----
+backend/evaluation/
 
-## Environment Variables
+Run the evaluator from the backend environment:
 
-Copy `.env.example` to `.env` and configure:
+python -m evaluation.evaluator
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server URL |
-| `OLLAMA_MODEL` | `codellama:7b` | Default LLM model (Code Llama required) |
-| `EMBEDDING_MODEL` | `all-MiniLM-L6-v2` | Sentence-transformer model |
-| `REPOSITORIES_DIR` | `backend/data/repos` | Where repos are cloned |
-| `INDEXES_DIR` | `backend/data/indexes` | Where vector indexes are stored |
-| `BACKEND_PORT` | `8000` | Backend port |
-| `FRONTEND_PORT` | `3000` | Frontend port |
+After the evaluation finishes, analyze the collected results:
 
----
+python -m evaluation.analyze_results
 
-## Data Flow
+The evaluation pipeline produces aggregated results that can be used to compare models across the different repository-understanding categories.
 
-```
-User Query (repo URL + symbol)
-        │
-        ▼
-1. CLONE / CACHE repository (Git)
-        │
-        ▼
-2. BUILD repository graph (AST + call graph)
-        │
-        ├──► 3. DETERMINISTIC ANALYSIS
-        │        - direct callers (AST)
-        │        - indirect callers (BFS traversal)
-        │        - test impact (test files, never counted as production)
-        │        - risk score (0-100, deterministic)
-        │        - Git commit history for symbol
-        │
-        └──► 4. RAG PIPELINE (if use_rag=True)
-                 - AST chunk repository into code-aware chunks
-                 - Embed chunks with all-MiniLM-L6-v2
-                 - Store in NumPy vector store (cached to disk)
-                 - Embed query
-                 - Retrieve top-k similar chunks (cosine similarity)
-                 - Assemble context (deterministic facts + code chunks)
-                 │
-                 ▼
-             5. CODE LLAMA (Ollama)
-                 - Receive grounded RAG prompt
-                 - Generate engineering analysis response
-                 │
-                 ▼
-             6. EVIDENCE VALIDATION
-                 - Validate LLM claims against deterministic ground truth
-                 - Flag numerical discrepancies, unsupported claims
-                 │
-                 ▼
-             7. RESPONSE to Frontend
-                 - deterministic metrics (authoritative)
-                 - LLM analysis (validated)
-                 - retrieved chunks with similarity scores
-                 - validation report
-```
+For longer runs, the evaluator saves intermediate results so that an interrupted experiment can continue from the existing checkpoint.
 
----
+Example Workflow
 
-## Authoritative Deterministic Metrics
+A typical RepoTwin workflow looks like this:
 
-The deterministic analysis is always authoritative. The LLM supplements — it never overrides.
+1. Provide a Git repository
+          |
+          v
+2. Clone / load repository
+          |
+          v
+3. Analyze source code
+          |
+          v
+4. Build repository graph
+          |
+          v
+5. Analyze dependencies and impact
+          |
+          v
+6. Read relevant Git history
+          |
+          v
+7. Build searchable code representation
+          |
+          v
+8. Retrieve relevant code
+          |
+          v
+9. Assemble repository evidence
+          |
+          v
+10. Send context to local LLM
+          |
+          v
+11. Validate and return repository-aware response
+Example Questions
 
-**Verified regression targets** (these values must always hold):
+RepoTwin is designed for questions such as:
 
-| Symbol | production | direct | indirect | tests | risk | level |
-|--------|-----------|--------|----------|-------|------|-------|
-| `method:src/requests/models.py:Response.close` | 12 | 3 | 9 | 34 | 87 | HIGH |
-| `method:fastapi/applications.py:FastAPI.include_router` | 0 | 0 | 0 | 60 | 0 | MINIMAL |
+What does APIRouter do in this repository?
 
-**Invariant**: Tests are never counted as production impact.
+Where is solve_dependencies implemented?
 
----
+Which components depend on this function?
 
-## Testing
+What happens when this API route is registered?
 
-Run the full test suite:
-```bash
-$env:PYTHONPATH="backend"   # PowerShell (Windows)
-# or
-export PYTHONPATH=backend   # bash (Linux/macOS)
+Which tests are related to this component?
 
-python -m pytest backend/tests/ -v
-```
+What parts of the codebase might be affected by changing this function?
 
-### Test Results (verified)
+Can you explain how these modules interact?
 
-```
-backend/tests/test_rag_pipeline.py::test_ast_chunking                    PASSED
-backend/tests/test_rag_pipeline.py::test_embedding_service               PASSED
-backend/tests/test_rag_pipeline.py::test_vector_store_similarity_search  PASSED
-backend/tests/test_rag_pipeline.py::test_rag_context_and_prompts         PASSED
-backend/tests/test_regression.py::test_requests_response_close_regression PASSED
-backend/tests/test_regression.py::test_fastapi_include_router_regression  PASSED
-backend/tests/test_regression.py::test_flask_regression                   PASSED
-backend/tests/test_regression.py::test_tests_never_counted_as_production  PASSED
+The focus is on questions that require understanding the repository rather than general programming knowledge.
 
-8 passed in 99.02s
-```
+Current Scope
 
----
+RepoTwin currently focuses on repository analysis, graph-based code understanding, retrieval, and LLM-assisted reasoning.
 
-## Project Structure
+The system is primarily designed around Python repositories, with the architecture allowing additional language support to be added later.
 
-```
-repotwin/
-├── .env.example                          # Environment template
-├── .gitignore                            # Excludes repos, indexes, venvs
-├── docker-compose.yml                    # Docker orchestration
-├── README.md
-│
-├── backend/
-│   ├── Dockerfile
-│   ├── requirements.txt
-│   └── app/
-│       ├── main.py                       # FastAPI app + all endpoints
-│       ├── analysis/
-│       │   ├── evidence.py               # Deterministic evidence builder
-│       │   └── test_impact.py            # Test impact analysis
-│       ├── graph/
-│       │   ├── call_graph.py             # AST call graph builder
-│       │   ├── repository_graph.py       # Repository-level graph
-│       │   ├── risk.py                   # Deterministic risk scorer
-│       │   ├── typed_graph.py            # Graph data structures
-│       │   └── unified_graph.py          # Graph composition
-│       ├── services/
-│       │   ├── chunking_service.py       # Exercise 2: AST chunker
-│       │   ├── embedding_service.py      # Exercise 3: Sentence-transformer
-│       │   ├── llm_service.py            # Exercise 1: Code Llama / Ollama
-│       │   ├── rag_service.py            # Exercise 4: RAG orchestrator
-│       │   ├── repository_service.py     # Repo clone + caching
-│       │   └── vector_store.py           # Exercise 3: NumPy vector store
-│       └── validation/
-│           └── evidence_validator.py     # LLM response validator
-│
-├── frontend/
-│   ├── Dockerfile
-│   ├── package.json
-│   ├── vite.config.js                    # Vite proxy config
-│   └── src/
-│       ├── App.jsx                       # Main React app
-│       └── App.css                       # Styles
-│
-└── backend/tests/
-    ├── test_rag_pipeline.py              # Tests for Exercises 2-4
-    └── test_regression.py               # Deterministic regression tests
-```
+Limitations
 
----
+RepoTwin is still an evolving project.
 
-## Code Llama / Ollama Integration Notes
+Current limitations include:
 
-- **Required model**: `codellama:7b` (as per assignment)
-- **No silent substitution**: If Code Llama is unavailable, the API reports `ollama_available: false` and explains the error. It does NOT claim success using a different model.
-- **Optional alternative**: `qwen2.5-coder:1.5b` can be explicitly selected in the frontend model dropdown.
-- **Configurable endpoint**: Set `OLLAMA_BASE_URL` — never hardcoded IPs.
+Analysis quality depends on the structure and language of the repository.
+LLM responses can still contain incorrect interpretations.
+Local model performance depends heavily on available CPU, memory, and GPU resources.
+Repository-wide analysis can become expensive for very large codebases.
+Retrieval quality depends on the quality of code chunking and embeddings.
+Some analyses are currently more mature for Python repositories than for other languages.
+Future Improvements
 
-To check Ollama status:
-```bash
-curl http://localhost:8000/health
-```
+Potential future work includes:
 
----
+Better multi-language repository parsing
+More precise dependency and call-graph analysis
+Improved repository retrieval
+Better handling of very large repositories
+More robust code-generation validation
+Deeper Git-history analysis
+Repository-wide refactoring assistance
+Automated documentation generation
+Additional LLM providers and models
+Improved visualization of repository relationships
+Project Status
 
-## Git Notes
+RepoTwin is an actively developed project focused on combining traditional software-engineering analysis with modern LLM and retrieval techniques.
 
-- **Do not commit**: `.venv/`, `node_modules/`, `.env`, `__pycache__/`, `backend/data/repos/`, `backend/data/indexes/`, `frontend/dist/`
-- All changes are Linux-compatible (POSIX paths enforced via `.as_posix()`)
-- Pull into Ubuntu VM and run as-is: `git pull && uvicorn app.main:app`
+The project explores how structured program analysis, repository graphs, semantic retrieval, and language models can work together to improve codebase understanding.
+
+License
+
+This project is currently intended for educational and research purposes.
