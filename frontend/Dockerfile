@@ -15,7 +15,11 @@ FROM nginx:alpine
 COPY --from=builder /app/dist /usr/share/nginx/html
 
 # Custom nginx config to support client-side routing
-RUN echo 'server { \
+RUN echo 'upstream backend_pool { \
+    server backend-1:8000; \
+    server backend-2:8000; \
+} \
+server { \
     listen 5173; \
     location / { \
         root /usr/share/nginx/html; \
@@ -23,9 +27,11 @@ RUN echo 'server { \
         try_files $uri $uri/ /index.html; \
     } \
     location /api/ { \
-        proxy_pass http://backend:8000/; \
+        proxy_pass http://backend_pool/; \
         proxy_set_header Host $host; \
         proxy_set_header X-Real-IP $remote_addr; \
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for; \
+        proxy_set_header X-Forwarded-Proto $scheme; \
     } \
 }' > /etc/nginx/conf.d/default.conf
 
