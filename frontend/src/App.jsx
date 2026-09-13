@@ -312,7 +312,7 @@ function App() {
                   StarCoder2 3B
                 </option>
                 <option value="opencoder:1.5b">
-                  Code Llama 7B
+                  OpenCoder:1.5B
                 </option>
               </select>
             </div>

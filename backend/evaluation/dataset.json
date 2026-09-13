@@ -1,0 +1,217 @@
+{
+  "repository": "fastapi-real",
+  "description": "Week 4 LLM evaluation dataset for RepoTwin",
+  "total_questions": 28,
+  "categories": {
+    "Explanation": [
+      {
+        "id": "E1",
+        "question": "Explain how FastAPI's APIRouter is used to organize and register path operations. Identify the main files and functions involved.",
+        "expected_files": ["fastapi/routing.py", "fastapi/applications.py"],
+        "expected_entities": ["APIRouter"],
+        "metrics": ["correctness", "relevance", "hallucination", "latency"]
+      },
+      {
+        "id": "E2",
+        "question": "Explain how FastAPI resolves dependencies for a request. Identify the important functions involved in dependency resolution.",
+        "expected_files": ["fastapi/dependencies/utils.py"],
+        "expected_entities": ["solve_dependencies", "get_dependant"],
+        "metrics": ["correctness", "relevance", "hallucination", "latency"]
+      },
+      {
+        "id": "E3",
+        "question": "Explain the high-level flow from creating a FastAPI application to handling an incoming route request.",
+        "expected_files": ["fastapi/applications.py", "fastapi/routing.py"],
+        "expected_entities": ["FastAPI", "APIRouter"],
+        "metrics": ["correctness", "relevance", "hallucination", "latency"]
+      },
+      {
+        "id": "E4",
+        "question": "Explain how FastAPI handles response models and response validation after a path operation is executed.",
+        "expected_files": ["fastapi/routing.py"],
+        "expected_entities": ["serialize_response"],
+        "metrics": ["correctness", "relevance", "hallucination", "latency"]
+      }
+    ],
+
+    "Code Retrieval": [
+      {
+        "id": "R1",
+        "question": "Find the implementation of APIRouter in the repository. Return the file path and the class name.",
+        "expected_files": ["fastapi/routing.py"],
+        "expected_entities": ["APIRouter"],
+        "metrics": ["retrieval_precision", "retrieval_recall", "correctness", "latency"]
+      },
+      {
+        "id": "R2",
+        "question": "Find the function responsible for solving dependencies for a request. Return its file path and function name.",
+        "expected_files": ["fastapi/dependencies/utils.py"],
+        "expected_entities": ["solve_dependencies"],
+        "metrics": ["retrieval_precision", "retrieval_recall", "correctness", "latency"]
+      },
+      {
+        "id": "R3",
+        "question": "Find the implementation of the FastAPI application class. Return the file path and class name.",
+        "expected_files": ["fastapi/applications.py"],
+        "expected_entities": ["FastAPI"],
+        "metrics": ["retrieval_precision", "retrieval_recall", "correctness", "latency"]
+      },
+      {
+        "id": "R4",
+        "question": "Find the repository code responsible for serializing a response before it is returned to the client.",
+        "expected_files": ["fastapi/routing.py"],
+        "expected_entities": ["serialize_response"],
+        "metrics": ["retrieval_precision", "retrieval_recall", "correctness", "latency"]
+      }
+    ],
+
+    "Dependency Understanding": [
+      {
+        "id": "D1",
+        "question": "What is the relationship between FastAPI.get and the route registration performed by APIRouter?",
+        "expected_files": ["fastapi/applications.py", "fastapi/routing.py"],
+        "expected_entities": ["FastAPI.get", "APIRouter.get"],
+        "metrics": ["relationship_accuracy", "hallucination", "latency"]
+      },
+      {
+        "id": "D2",
+        "question": "Trace the relationship between APIRouter.add_api_route and the route objects ultimately used to handle requests.",
+        "expected_files": ["fastapi/routing.py"],
+        "expected_entities": ["add_api_route", "APIRoute"],
+        "metrics": ["relationship_accuracy", "hallucination", "latency"]
+      },
+      {
+        "id": "D3",
+        "question": "What functions are involved between dependency declaration and dependency resolution during request processing?",
+        "expected_files": ["fastapi/dependencies/utils.py", "fastapi/routing.py"],
+        "expected_entities": ["get_dependant", "solve_dependencies"],
+        "metrics": ["relationship_accuracy", "hallucination", "latency"]
+      },
+      {
+        "id": "D4",
+        "question": "Trace how a path operation's response is passed into response serialization. Identify the relevant functions.",
+        "expected_files": ["fastapi/routing.py"],
+        "expected_entities": ["serialize_response"],
+        "metrics": ["relationship_accuracy", "hallucination", "latency"]
+      }
+    ],
+
+    "Bug Analysis": [
+      {
+        "id": "B1",
+        "question": "A route declares a response model but the returned data does not match it. Identify where in the repository this situation is handled and explain what happens.",
+        "expected_files": ["fastapi/routing.py"],
+        "expected_entities": ["serialize_response"],
+        "metrics": ["correctness", "relevance", "hallucination", "latency"]
+      },
+      {
+        "id": "B2",
+        "question": "A dependency is declared on a path operation but is not being resolved correctly. Identify the likely dependency-resolution code path that should be investigated.",
+        "expected_files": ["fastapi/dependencies/utils.py", "fastapi/routing.py"],
+        "expected_entities": ["get_dependant", "solve_dependencies"],
+        "metrics": ["correctness", "relevance", "hallucination", "latency"]
+      },
+      {
+        "id": "B3",
+        "question": "A developer reports that a route registered through an APIRouter is not being reached. Which repository code should be investigated first and why?",
+        "expected_files": ["fastapi/routing.py", "fastapi/applications.py"],
+        "expected_entities": ["APIRouter", "include_router", "add_api_route"],
+        "metrics": ["correctness", "relevance", "hallucination", "latency"]
+      },
+      {
+        "id": "B4",
+        "question": "A request reaches a path operation but fails while converting the returned value into the declared response format. Identify the relevant code path.",
+        "expected_files": ["fastapi/routing.py"],
+        "expected_entities": ["serialize_response"],
+        "metrics": ["correctness", "relevance", "hallucination", "latency"]
+      }
+    ],
+
+    "Code Generation": [
+      {
+        "id": "G1",
+        "question": "Using the repository's existing FastAPI patterns, write a minimal example of an APIRouter with a GET endpoint and explain where it would be registered.",
+        "expected_files": ["fastapi/routing.py", "fastapi/applications.py"],
+        "metrics": ["correctness", "relevance", "repository_grounding", "latency"]
+      },
+      {
+        "id": "G2",
+        "question": "Write a small FastAPI endpoint that uses a dependency and explain how the repository resolves that dependency.",
+        "expected_files": ["fastapi/dependencies/utils.py"],
+        "metrics": ["correctness", "relevance", "repository_grounding", "latency"]
+      },
+      {
+        "id": "G3",
+        "question": "Write a small FastAPI endpoint using a response model and explain how the repository handles the returned value.",
+        "expected_files": ["fastapi/routing.py"],
+        "metrics": ["correctness", "relevance", "repository_grounding", "latency"]
+      },
+      {
+        "id": "G4",
+        "question": "Generate a small route-registration example using the repository's APIRouter pattern. Keep the implementation consistent with FastAPI's existing architecture.",
+        "expected_files": ["fastapi/routing.py", "fastapi/applications.py"],
+        "metrics": ["correctness", "relevance", "repository_grounding", "latency"]
+      }
+    ],
+
+    "Refactoring": [
+      {
+        "id": "F1",
+        "question": "Suggest how a group of related routes could be moved from a FastAPI application into an APIRouter without changing their behavior. Identify the repository patterns that support this.",
+        "expected_files": ["fastapi/routing.py", "fastapi/applications.py"],
+        "expected_entities": ["APIRouter", "include_router"],
+        "metrics": ["correctness", "relevance", "repository_grounding", "hallucination", "latency"]
+      },
+      {
+        "id": "F2",
+        "question": "Suggest a refactoring that separates dependency-related logic from route handling while remaining consistent with the repository architecture.",
+        "expected_files": ["fastapi/dependencies/utils.py", "fastapi/routing.py"],
+        "expected_entities": ["solve_dependencies"],
+        "metrics": ["correctness", "relevance", "repository_grounding", "hallucination", "latency"]
+      },
+      {
+        "id": "F3",
+        "question": "How would you refactor route-handling code to avoid duplicating response serialization logic? Identify the existing repository function that should remain the central implementation.",
+        "expected_files": ["fastapi/routing.py"],
+        "expected_entities": ["serialize_response"],
+        "metrics": ["correctness", "relevance", "repository_grounding", "hallucination", "latency"]
+      },
+      {
+        "id": "F4",
+        "question": "Propose a repository-grounded refactoring for a large collection of routes so that the code is easier to maintain while preserving route behavior.",
+        "expected_files": ["fastapi/routing.py", "fastapi/applications.py"],
+        "metrics": ["correctness", "relevance", "repository_grounding", "hallucination", "latency"]
+      }
+    ],
+
+    "RAG based Question": [
+      {
+        "id": "A1",
+        "question": "Using repository evidence, explain how a request travels from a registered route to dependency resolution and execution.",
+        "expected_files": ["fastapi/routing.py", "fastapi/dependencies/utils.py"],
+        "expected_entities": ["APIRoute", "solve_dependencies"],
+        "metrics": ["context_precision", "context_recall", "answer_correctness", "faithfulness", "latency"]
+      },
+      {
+        "id": "A2",
+        "question": "Using retrieved repository context, identify the files and functions involved when an APIRouter is included in a FastAPI application.",
+        "expected_files": ["fastapi/applications.py", "fastapi/routing.py"],
+        "expected_entities": ["include_router", "APIRouter"],
+        "metrics": ["context_precision", "context_recall", "answer_correctness", "faithfulness", "latency"]
+      },
+      {
+        "id": "A3",
+        "question": "Using repository evidence, explain how response serialization is connected to response models.",
+        "expected_files": ["fastapi/routing.py"],
+        "expected_entities": ["serialize_response"],
+        "metrics": ["context_precision", "context_recall", "answer_correctness", "faithfulness", "latency"]
+      },
+      {
+        "id": "A4",
+        "question": "Using retrieved context from the repository, identify the relevant implementation and tests that demonstrate dependency injection behavior.",
+        "expected_files": ["fastapi/dependencies/utils.py", "tests"],
+        "metrics": ["context_precision", "context_recall", "answer_correctness", "faithfulness", "latency"]
+      }
+    ]
+  }
+}

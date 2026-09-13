@@ -40,3 +40,8 @@ Thumbs.db
 .vscode/
 .idea/
 *.backup
+
+# Week 4 evaluation outputs
+backend/evaluation/results/raw_results.json
+backend/evaluation/results/scored_results.json
+backend/evaluation/results/__pycache__/

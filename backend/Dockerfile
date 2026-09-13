@@ -11,6 +11,12 @@ WORKDIR /app
 
 # Copy and install python dependencies
 COPY requirements.txt /app/
+
+# Install CPU-only PyTorch (VM has no NVIDIA GPU)
+RUN pip install --no-cache-dir \
+    --index-url https://download.pytorch.org/whl/cpu \
+    torch
+
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application source code
@@ -19,7 +25,7 @@ COPY . /app/
 # Environment defaults
 ENV PYTHONUNBUFFERED=1
 ENV OLLAMA_BASE_URL=http://host.docker.internal:11434
-ENV OLLAMA_MODEL=codellama:7b
+ENV OLLAMA_MODEL=opencoder:1.5b
 ENV EMBEDDING_MODEL=all-MiniLM-L6-v2
 ENV REPOSITORIES_DIR=/app/data/repos
 ENV INDEXES_DIR=/app/data/indexes

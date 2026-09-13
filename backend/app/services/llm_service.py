@@ -33,6 +33,25 @@ def generate_with_ollama(
     base_url: str | None = None,
     timeout: int = 120,
 ) -> str:
+    result = generate_with_ollama_metadata(
+        prompt=prompt,
+        model=model,
+        base_url=base_url,
+        timeout=timeout,
+    )
+    return result.get("response", "")
+
+
+def generate_with_ollama_metadata(
+    prompt: str,
+    model: str | None = None,
+    base_url: str | None = None,
+    timeout: int = 120,
+) -> dict[str, Any]:
+    """
+    Generate with Ollama and return both response text and
+    generation metadata for evaluation experiments.
+    """
     model = model or get_default_model()
     url = base_url or get_ollama_base_url()
     endpoint = f"{url}/api/generate"
@@ -43,17 +62,29 @@ def generate_with_ollama(
             "model": model,
             "prompt": prompt,
             "stream": False,
+            "keep_alive": "10m",
             "options": {
                 "temperature": 0.1,
-                "num_ctx": 4096,
-                "num_predict": 500,
+                "num_ctx": 2048,
+                "num_predict": 300,
             },
         },
         timeout=timeout,
     )
     response.raise_for_status()
+
     data = response.json()
-    return data.get("response", "")
+
+    return {
+        "response": data.get("response", ""),
+        "model": data.get("model", model),
+        "total_duration_ns": data.get("total_duration"),
+        "load_duration_ns": data.get("load_duration"),
+        "prompt_eval_count": data.get("prompt_eval_count"),
+        "prompt_eval_duration_ns": data.get("prompt_eval_duration"),
+        "eval_count": data.get("eval_count"),
+        "eval_duration_ns": data.get("eval_duration"),
+    }
 
 
 def build_rag_prompt(retrieval_context: dict[str, Any]) -> str:
@@ -294,14 +325,18 @@ def analyze_with_ollama(
     ollama_response = ""
     ollama_available = False
     ollama_error = None
+    ollama_metadata = {}
 
     try:
-        ollama_response = generate_with_ollama(
+        ollama_result = generate_with_ollama_metadata(
             prompt=prompt,
             model=model_to_use,
             base_url=base_url,
-            timeout=180,
+            timeout=360,
         )
+
+        ollama_response = ollama_result.get("response", "")
+        ollama_metadata = ollama_result
         ollama_available = True
     except Exception as exc:
         ollama_error = f"Ollama model '{model_to_use}' at {base_url} unavailable: {exc}"
@@ -313,7 +348,7 @@ def analyze_with_ollama(
         answer_for_validation = deterministic_answer
         final_answer = deterministic_answer
         if ollama_response:
-            final_answer = f"{deterministic_answer}\n\n[Code Llama Output]:\n{ollama_response}"
+            final_answer = f"{deterministic_answer}\n\n[LLM Output]:\n{ollama_response}"
     else:
         # Non-RAG output demonstrates ungrounded generation
         if ollama_response:
@@ -337,4 +372,5 @@ def analyze_with_ollama(
         "validation": validation,
         "prompt": prompt,
         "error": ollama_error,
+        "ollama_metadata": ollama_metadata,
     }

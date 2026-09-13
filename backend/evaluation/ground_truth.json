@@ -1,0 +1,396 @@
+{
+  "scoring": {
+    "scale": {
+      "0": "Incorrect, irrelevant, or hallucinated",
+      "1": "Partially correct but missing important repository-grounded information",
+      "2": "Correct, relevant, and sufficiently repository-grounded"
+    },
+    "retrieval": {
+      "precision": "Relevant retrieved files or entities divided by all retrieved files or entities",
+      "recall": "Relevant retrieved expected files or entities divided by all expected files or entities"
+    }
+  },
+
+  "questions": {
+
+    "E1": {
+      "category": "Explanation",
+      "must_include": [
+        "APIRouter is used to organize route/path operations",
+        "APIRouter implementation is in fastapi/routing.py",
+        "FastAPI application integration involves fastapi/applications.py",
+        "Routes registered through the router become part of the application's routing structure"
+      ]
+    },
+
+    "E2": {
+      "category": "Explanation",
+      "must_include": [
+        "Dependencies are resolved during request processing",
+        "get_dependant is involved in constructing dependency information",
+        "solve_dependencies is involved in resolving dependencies",
+        "fastapi/dependencies/utils.py contains the core dependency-resolution implementation"
+      ]
+    },
+
+    "E3": {
+      "category": "Explanation",
+      "must_include": [
+        "FastAPI application is created",
+        "Routes/path operations are registered",
+        "Registered routes are represented and matched during request handling",
+        "fastapi/applications.py and fastapi/routing.py are relevant"
+      ]
+    },
+
+    "E4": {
+      "category": "Explanation",
+      "must_include": [
+        "The path operation produces a response value",
+        "Response handling considers the declared response model",
+        "serialize_response is involved in response serialization/validation",
+        "The relevant implementation is in fastapi/routing.py"
+      ]
+    },
+
+    "R1": {
+      "category": "Code Retrieval",
+      "expected_files": [
+        "fastapi/routing.py"
+      ],
+      "expected_entities": [
+        "APIRouter"
+      ]
+    },
+
+    "R2": {
+      "category": "Code Retrieval",
+      "expected_files": [
+        "fastapi/dependencies/utils.py"
+      ],
+      "expected_entities": [
+        "solve_dependencies"
+      ]
+    },
+
+    "R3": {
+      "category": "Code Retrieval",
+      "expected_files": [
+        "fastapi/applications.py"
+      ],
+      "expected_entities": [
+        "FastAPI"
+      ]
+    },
+
+    "R4": {
+      "category": "Code Retrieval",
+      "expected_files": [
+        "fastapi/routing.py"
+      ],
+      "expected_entities": [
+        "serialize_response"
+      ]
+    },
+
+    "D1": {
+      "category": "Dependency Understanding",
+      "must_include": [
+        "FastAPI.get is associated with route registration",
+        "APIRouter.get provides router-based route registration",
+        "The application and router ultimately participate in registering path operations"
+      ],
+      "expected_files": [
+        "fastapi/applications.py",
+        "fastapi/routing.py"
+      ]
+    },
+
+    "D2": {
+      "category": "Dependency Understanding",
+      "must_include": [
+        "add_api_route registers a path operation",
+        "APIRoute is involved in representing/handling the registered route",
+        "The registered route becomes part of the routing system used for requests"
+      ],
+      "expected_files": [
+        "fastapi/routing.py"
+      ],
+      "expected_entities": [
+        "add_api_route",
+        "APIRoute"
+      ]
+    },
+
+    "D3": {
+      "category": "Dependency Understanding",
+      "must_include": [
+        "Dependency declarations are converted into dependency information",
+        "get_dependant is involved in building the dependency structure",
+        "solve_dependencies resolves the dependencies during request processing",
+        "Route handling invokes this dependency-resolution process"
+      ],
+      "expected_files": [
+        "fastapi/dependencies/utils.py",
+        "fastapi/routing.py"
+      ],
+      "expected_entities": [
+        "get_dependant",
+        "solve_dependencies"
+      ]
+    },
+
+    "D4": {
+      "category": "Dependency Understanding",
+      "must_include": [
+        "A path operation returns a value",
+        "The returned value is passed through response handling",
+        "serialize_response is responsible for response serialization",
+        "This logic is located in fastapi/routing.py"
+      ],
+      "expected_files": [
+        "fastapi/routing.py"
+      ],
+      "expected_entities": [
+        "serialize_response"
+      ]
+    },
+
+    "B1": {
+      "category": "Bug Analysis",
+      "must_include": [
+        "The response model is relevant to the returned data",
+        "Response serialization/validation is involved",
+        "serialize_response should be investigated",
+        "fastapi/routing.py contains the relevant code"
+      ],
+      "expected_files": [
+        "fastapi/routing.py"
+      ]
+    },
+
+    "B2": {
+      "category": "Bug Analysis",
+      "must_include": [
+        "Dependency construction/resolution should be investigated",
+        "get_dependant is relevant",
+        "solve_dependencies is relevant",
+        "fastapi/dependencies/utils.py is a primary location",
+        "fastapi/routing.py participates in request handling"
+      ],
+      "expected_files": [
+        "fastapi/dependencies/utils.py",
+        "fastapi/routing.py"
+      ]
+    },
+
+    "B3": {
+      "category": "Bug Analysis",
+      "must_include": [
+        "APIRouter route registration should be investigated",
+        "add_api_route is relevant",
+        "include_router is relevant when integrating a router into an application",
+        "fastapi/routing.py and fastapi/applications.py are relevant"
+      ],
+      "expected_files": [
+        "fastapi/routing.py",
+        "fastapi/applications.py"
+      ],
+      "expected_entities": [
+        "APIRouter",
+        "include_router",
+        "add_api_route"
+      ]
+    },
+
+    "B4": {
+      "category": "Bug Analysis",
+      "must_include": [
+        "The failure occurs during response conversion/serialization",
+        "serialize_response is the relevant implementation",
+        "fastapi/routing.py contains the relevant code path"
+      ],
+      "expected_files": [
+        "fastapi/routing.py"
+      ],
+      "expected_entities": [
+        "serialize_response"
+      ]
+    },
+
+    "G1": {
+      "category": "Code Generation",
+      "must_include": [
+        "Use APIRouter",
+        "Define a GET route",
+        "The router must be included/registered with the FastAPI application",
+        "The implementation should follow FastAPI's existing routing pattern"
+      ],
+      "expected_files": [
+        "fastapi/routing.py",
+        "fastapi/applications.py"
+      ]
+    },
+
+    "G2": {
+      "category": "Code Generation",
+      "must_include": [
+        "Define a dependency function",
+        "Use the dependency from a FastAPI endpoint",
+        "Explain that FastAPI resolves the dependency during request handling",
+        "Reference get_dependant and/or solve_dependencies"
+      ],
+      "expected_files": [
+        "fastapi/dependencies/utils.py"
+      ]
+    },
+
+    "G3": {
+      "category": "Code Generation",
+      "must_include": [
+        "Define an endpoint with a response model",
+        "Return data compatible with the response model",
+        "Explain that response handling uses serialization/validation",
+        "Reference serialize_response"
+      ],
+      "expected_files": [
+        "fastapi/routing.py"
+      ]
+    },
+
+    "G4": {
+      "category": "Code Generation",
+      "must_include": [
+        "Use APIRouter",
+        "Register a route using the router pattern",
+        "Include/register the router with the application",
+        "Remain consistent with FastAPI's architecture"
+      ],
+      "expected_files": [
+        "fastapi/routing.py",
+        "fastapi/applications.py"
+      ]
+    },
+
+    "F1": {
+      "category": "Refactoring",
+      "must_include": [
+        "Move related routes into an APIRouter",
+        "Preserve existing route behavior",
+        "Register the router with the application",
+        "include_router is relevant"
+      ],
+      "expected_files": [
+        "fastapi/routing.py",
+        "fastapi/applications.py"
+      ]
+    },
+
+    "F2": {
+      "category": "Refactoring",
+      "must_include": [
+        "Separate dependency-related logic from route handling",
+        "Keep dependency resolution in the dependency utilities area",
+        "solve_dependencies remains a central dependency-resolution function",
+        "Avoid unnecessary duplication"
+      ],
+      "expected_files": [
+        "fastapi/dependencies/utils.py",
+        "fastapi/routing.py"
+      ]
+    },
+
+    "F3": {
+      "category": "Refactoring",
+      "must_include": [
+        "Avoid duplicating response serialization logic",
+        "Centralize response serialization",
+        "serialize_response should remain the central implementation",
+        "Relevant code is in fastapi/routing.py"
+      ],
+      "expected_files": [
+        "fastapi/routing.py"
+      ]
+    },
+
+    "F4": {
+      "category": "Refactoring",
+      "must_include": [
+        "Group related routes using the repository's routing architecture",
+        "Use APIRouter where appropriate",
+        "Integrate routers with the FastAPI application",
+        "Preserve existing route behavior"
+      ],
+      "expected_files": [
+        "fastapi/routing.py",
+        "fastapi/applications.py"
+      ]
+    },
+
+    "A1": {
+      "category": "RAG based Question",
+      "must_include": [
+        "Registered route is matched/handled",
+        "Dependency resolution occurs during request processing",
+        "solve_dependencies is involved",
+        "APIRoute or route handling is involved",
+        "The answer must be supported by retrieved repository context"
+      ],
+      "expected_files": [
+        "fastapi/routing.py",
+        "fastapi/dependencies/utils.py"
+      ],
+      "expected_entities": [
+        "APIRoute",
+        "solve_dependencies"
+      ]
+    },
+
+    "A2": {
+      "category": "RAG based Question",
+      "must_include": [
+        "APIRouter is involved",
+        "include_router is involved in application integration",
+        "fastapi/applications.py and fastapi/routing.py are relevant",
+        "The answer must use retrieved repository evidence"
+      ],
+      "expected_files": [
+        "fastapi/applications.py",
+        "fastapi/routing.py"
+      ],
+      "expected_entities": [
+        "include_router",
+        "APIRouter"
+      ]
+    },
+
+    "A3": {
+      "category": "RAG based Question",
+      "must_include": [
+        "Response models influence response processing",
+        "serialize_response is involved in serialization",
+        "The explanation must be grounded in retrieved repository context"
+      ],
+      "expected_files": [
+        "fastapi/routing.py"
+      ],
+      "expected_entities": [
+        "serialize_response"
+      ]
+    },
+
+    "A4": {
+      "category": "RAG based Question",
+      "must_include": [
+        "Dependency injection implementation is relevant",
+        "fastapi/dependencies/utils.py is relevant",
+        "Repository tests should be identified as evidence",
+        "The answer must distinguish repository evidence from general knowledge"
+      ],
+      "expected_files": [
+        "fastapi/dependencies/utils.py",
+        "tests"
+      ]
+    }
+  }
+}
